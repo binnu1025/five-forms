@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>五表｜活動協作系統</title>
+  <meta name="description" content="活動工作組五表、權限、人員與物資借還管理原型">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">五</span><div><strong>五表</strong><small>活動協作系統</small></div></div>
+      <nav id="mainNav" aria-label="主要導覽">
+        <button class="nav-item active" data-page="dashboard"><span>⌂</span>總覽</button>
+        <button class="nav-item" data-page="events"><span>▣</span>活動管理</button>
+        <button class="nav-item" data-page="people"><span>♙</span>人員與雁群</button>
+        <button class="nav-item" data-page="materials"><span>▤</span>物資借還</button>
+        <button class="nav-item" data-page="history"><span>◷</span>歷史活動</button>
+      </nav>
+      <div class="sidebar-note"><span class="dot"></span>Google Sheet 同步規劃中</div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <button class="menu-button" id="menuButton" aria-label="開啟選單">☰</button>
+        <div><p class="eyebrow">2027 風尚秀</p><h1 id="pageTitle">活動總覽</h1></div>
+        <div class="user-box">
+          <label for="roleSwitcher">展示角色</label>
+          <select id="roleSwitcher"><option value="president">會長</option><option value="organizer">主辦人</option><option value="leader">環境組組長</option><option value="member">環境組組員</option></select>
+          <div class="avatar">陳</div>
+        </div>
+      </header>
+
+      <section class="page active" id="dashboard">
+        <div class="welcome">
+          <div><span class="pill">進行中</span><h2>早安，今天把流程確認清楚。</h2><p>以下是你目前可查看的工作與需要處理的項目。</p></div>
+          <button class="primary" data-go="events">查看完整五表</button>
+        </div>
+        <div class="stats">
+          <article><span>活動完成度</span><strong>68%</strong><div class="progress"><i style="width:68%"></i></div></article>
+          <article><span>今日工作</span><strong>7 <small>項</small></strong><em>2 項尚未完成</em></article>
+          <article><span>待歸還物資</span><strong class="danger-text">3 <small>筆</small></strong><em>其中 1 筆已逾期</em></article>
+          <article class="budget-stat"><span>活動總預算</span><strong>$24,680</strong><em>已使用 61%</em></article>
+        </div>
+        <div class="grid two-one">
+          <article class="card"><div class="card-head"><div><p class="eyebrow">今日流程</p><h3>你接下來要做什麼</h3></div><button class="text-button">查看全部</button></div><div id="timeline" class="timeline"></div></article>
+          <article class="card alert-card"><div class="card-head"><div><p class="eyebrow">待處理</p><h3>物資提醒</h3></div><span class="count">3</span></div><div id="materialAlerts"></div><button class="secondary full" data-go="materials">前往物資借還</button></article>
+        </div>
+        <article class="card"><div class="card-head"><div><p class="eyebrow">表單狀態</p><h3>環境組六表</h3></div><span class="muted">最後更新：今天 09:42</span></div><div id="formCards" class="form-cards"></div></article>
+      </section>
+
+      <section class="page" id="events">
+        <div class="section-head"><div><p class="eyebrow">活動管理</p><h2>2027 風尚秀・環境組</h2><p>必要表單已由公版自動建立，可增加項目但不會漏開。</p></div><button class="primary">＋ 新增工作</button></div>
+        <div class="tabs" id="formTabs"></div>
+        <article class="card table-card"><div class="card-head"><div><p class="eyebrow" id="activeFormKicker">工作進度表</p><h3 id="activeFormTitle">環境組工作進度</h3></div><div class="actions"><button class="secondary">匯出圖片</button><button class="secondary">匯出 Excel</button></div></div><div class="table-wrap"><table><thead id="workHead"></thead><tbody id="workBody"></tbody></table></div></article>
+      </section>
+
+      <section class="page" id="people">
+        <div class="section-head"><div><p class="eyebrow">共用資料庫</p><h2>人員與雁群管理</h2><p>人員只建立一次，再依活動設定組別與角色。</p></div><button class="primary" id="addPersonBtn">＋ 新增人員</button></div>
+        <article class="card"><div class="filters"><label class="search"><span>⌕</span><input id="peopleSearch" placeholder="搜尋姓名或 Gmail"></label><select id="flockFilter"><option value="all">所有雁群</option><option>台北雁群</option><option>桃園雁群</option><option>新竹雁群</option></select></div><div id="peopleList" class="people-list"></div></article>
+      </section>
+
+      <section class="page" id="materials">
+        <div class="section-head"><div><p class="eyebrow">環境組</p><h2>物資借用與歸還</h2><p>借出與歸還都需確認數量、位置與照片。</p></div><button class="primary" id="addMaterialBtn">＋ 新增借用</button></div>
+        <div class="status-filter"><button class="chip active" data-status="all">全部 4</button><button class="chip" data-status="overdue">逾期 1</button><button class="chip" data-status="partial">部分歸還 1</button><button class="chip" data-status="shelving">待歸位 1</button></div>
+        <div id="materialsGrid" class="material-grid"></div>
+      </section>
+
+      <section class="page" id="history">
+        <div class="section-head"><div><p class="eyebrow">歷史紀錄</p><h2>過去活動</h2><p>搜尋、查看、比較或複製過去的活動資料。</p></div></div>
+        <article class="card"><div class="filters"><label class="search"><span>⌕</span><input id="historySearch" placeholder="搜尋活動、日期或工作組"></label><select><option>所有年份</option><option>2027</option><option>2026</option><option>2025</option></select></div><div id="historyList" class="history-list"></div></article>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="materialDialog">
+    <form method="dialog" id="materialForm"><div class="modal-head"><div><p class="eyebrow">新增紀錄</p><h3>物資借用</h3></div><button value="cancel" aria-label="關閉">×</button></div><div class="form-grid"><label>物資名稱<input name="name" required placeholder="例如：折疊椅"></label><label>借用數量<input name="qty" required type="number" min="1" value="1"></label><label>預定歸還日<input name="due" required type="date"></label><label>歸還位置<input name="location" required placeholder="例如：B1 倉庫"></label><label class="wide">借出照片<input name="photo" type="file" accept="image/*" capture="environment"></label></div><div class="photo-preview" id="photoPreview">照片將預覽於此，正式版會上傳至 Google Drive</div><div class="modal-actions"><button value="cancel" class="secondary">取消</button><button value="default" class="primary" id="saveMaterial">儲存借用紀錄</button></div></form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
