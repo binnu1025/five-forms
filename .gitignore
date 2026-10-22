@@ -3,3 +3,6 @@ Thumbs.db
 .env
 .env.*
 node_modules/
+
+# 真實名單／個資，不進公開 repo
+*.local.json
