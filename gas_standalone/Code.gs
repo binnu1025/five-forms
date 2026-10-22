@@ -23,7 +23,13 @@ const WRITABLE = {
   '物資借用': ['活動ID', '組別', '物資', '數量', '攜帶者', '借出照片', '已還', '已歸位', '歸還照片', '備註'],
   '收支':     ['活動ID', '類型', '組別', '項目', '金額', '登錄人', '備註'],
   '會後精進': ['活動ID', '組別', '問題', '影響', '下次做法', '記錄人'],
+  // 下面這幾張只有核心角色能動（canEdit_ 會擋掉一般組員）
+  '活動':     ['活動ID', '活動名稱', '日期', '地點', '狀態', '工作組'],
+  '活動人力': ['活動ID', 'Gmail', '姓名', '組別', '角色'],
+  '會議':     ['活動ID', '會議名稱', '日期'],
+  '活動細流': ['活動ID', '開始', '結束', '全體流程', '組別', '該組工作'],
 };
+const ADMIN_ONLY = ['活動', '活動人力', '會議', '活動細流'];
 // 這些角色看得到全部組別的收支與總額
 const FULL_FINANCE_ROLES = ['會長', '青年團團長', '活動組長', '副組長', '財務長'];
 
@@ -143,21 +149,41 @@ function doPost(e) {
     const cols = WRITABLE[name];
     if (!cols) return json_({ ok: false, error: '這張表不開放寫入：' + name });
 
-    const group = String(body.row['組別'] || '');
-    if (!canEdit_(who, group)) return json_({ ok: false, error: '你沒有「' + group + '」的填寫權限' });
-    if (name === '收支' && !canSeeAllFinance_(who) && who.leads.indexOf(group) === -1) {
-      return json_({ ok: false, error: '你不能登錄這一組的收支' });
+    if (ADMIN_ONLY.indexOf(name) !== -1 && !isAdmin_(who)) {
+      return json_({ ok: false, error: '只有核心幹部能改「' + name + '」' });
     }
 
     const sh = sheet_(name);
-    const line = cols.map(c => body.row[c] !== undefined ? body.row[c] : '');
-    if (body.rowIndex) sh.getRange(body.rowIndex, 1, 1, cols.length).setValues([line]);
-    else sh.appendRow(line);
+    const incoming = body.rows || [body.row];   // rows：一次寫多列
 
-    return json_({ ok: true });
+    // replace：把舊資料整個換掉，不要一直往下疊
+    if (body.replace) {
+      const last = sh.getLastRow();
+      if (last > 1) sh.getRange(2, 1, last - 1, sh.getLastColumn()).clearContent();
+    }
+
+    for (const row of incoming) {
+      const group = String(row['組別'] || '');
+      if (!body.replace && !canEdit_(who, group)) {
+        return json_({ ok: false, error: '你沒有「' + group + '」的填寫權限' });
+      }
+      if (name === '收支' && !canSeeAllFinance_(who) && who.leads.indexOf(group) === -1) {
+        return json_({ ok: false, error: '你不能登錄這一組的收支' });
+      }
+    }
+
+    const lines = incoming.map(row => cols.map(c => row[c] !== undefined ? row[c] : ''));
+    if (body.rowIndex && lines.length === 1) sh.getRange(body.rowIndex, 1, 1, cols.length).setValues([lines[0]]);
+    else if (lines.length) sh.getRange(sh.getLastRow() + 1, 1, lines.length, cols.length).setValues(lines);
+
+    return json_({ ok: true, written: lines.length });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
+}
+
+function isAdmin_(who) {
+  return who.roles.some(r => ['會長', '青年團團長', '活動組長', '副組長', '執行秘書', '台北團長', '新竹團長', '中壢團長'].indexOf(r) !== -1);
 }
 
 function canEdit_(who, group) {

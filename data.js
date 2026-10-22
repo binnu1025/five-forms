@@ -1,28 +1,93 @@
-/* 後台在這個 repo 裡：data/current.json。
-   改那個檔、commit、push，網站就更新——不需要 Google、不需要任何授權。
+/* 後台是 Google Sheet，中間隔一層 Apps Script。
+   網頁只跟那個端點講話，從頭到尾碰不到試算表本身，
+   所以 Sheet 可以只分享給會長與團長。
 
-   在 app.js 之後載入，所以直接沿用它的 groups / flow / directors / render* 等全域。
-   讀不到就安靜留在示範資料，不讓頁面壞掉。 */
+   在 app.js 之後載入，直接沿用它的 groups / flow / render* 等全域。
+   端點掛掉就退回 repo 裡的 data/current.json，再不行才留在示範資料。 */
 
-const DATA_URL = 'data/current.json?v=1.12';
+const API = 'https://script.google.com/macros/s/AKfycbwpJuvmtI_4jMG6NcEb_JtD15xg75Lzow_qQcA5yKu1gzBEWQ8fK4uDwLK3MtQzMBRDRg/exec';
+const FALLBACK = 'data/current.json';
+
+// 目前是誰在用。接上 Google 登入後這裡換成 id_token，identify_() 已經準備好了。
+const whoAmI = () => localStorage.getItem('five-gmail') || 'binnu1025@gmail.com';
+
+let sheetReady = false;
+
+async function apiGet() {
+  const res = await fetch(`${API}?who=${encodeURIComponent(whoAmI())}&t=${Date.now()}`);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || '端點回報失敗');
+  return json;
+}
+
+/* 整張表換掉，不用去追哪一列改了哪一欄 */
+async function apiReplace(sheet, rows) {
+  if (!sheetReady) return;
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ sheet, who: whoAmI(), replace: true, rows }),
+    });
+    const out = await res.json();
+    if (!out.ok) toast('寫回試算表失敗：' + out.error);
+  } catch (err) {
+    toast('寫回試算表失敗，改動只留在這支手機上');
+    console.warn('[五表] 寫回失敗：', err);
+  }
+}
+
+/* ── Sheet 的列 ↔ app.js 的資料結構 ───────────────────────── */
+
+const rowsToGroups = (roster, order) => {
+  const byGroup = {};
+  roster.filter(r => r['組別'] && r['組別'] !== '核心').forEach(r => {
+    const g = byGroup[r['組別']] || (byGroup[r['組別']] = { lead: '', members: [] });
+    if (r['角色'] === '組長') g.lead = r['姓名']; else g.members.push(r['姓名']);
+  });
+  const names = order.length ? order : Object.keys(byGroup);
+  return names.filter(n => byGroup[n]).map(n => [n, byGroup[n].lead, byGroup[n].members]);
+};
+
+const rowsToFlow = rows => {
+  const slots = [];
+  rows.forEach(r => {
+    const time = r['結束'] && r['結束'] !== r['開始'] ? `${r['開始']}–${r['結束']}` : String(r['開始'] || '');
+    let slot = slots.find(s => s.time === time && s.name === r['全體流程']);
+    if (!slot) slots.push(slot = { time, name: r['全體流程'] || '（未命名時段）', jobs: {} });
+    if (r['組別'] && r['該組工作']) slot.jobs[r['組別']] = r['該組工作'];
+  });
+  return slots;
+};
+
+const progressToRows = () => progressRecords.map(t => ({
+  活動ID: window.__eventId || 'A001', 會議: t.meeting, 組別: t.group, 負責人: t.owner,
+  要完成事項: t.item, 目前進度: t.update, 下一步: t.next, 期限: t.due, 狀態: t.status,
+}));
+const materialsToRows = () => materials.map(m => ({
+  活動ID: window.__eventId || 'A001', 組別: m[1], 物資: m[0], 數量: m[2], 攜帶者: m[3],
+  借出照片: '', 已還: m[5] ? 'TRUE' : 'FALSE', 已歸位: '', 歸還照片: '', 備註: m[4] || '',
+}));
+const financeToRows = () => budgets.map(b => ({
+  活動ID: window.__eventId || 'A001', 類型: '成本', 組別: b[0], 項目: b[1],
+  金額: b[2], 登錄人: b[3], 備註: b[4] || '',
+}));
+
+/* ── 畫面上那些寫死的數字 ─────────────────────────────────── */
 
 function applyEvent(ev) {
   if (!ev || !ev.name) return;
+  window.__eventId = ev.id || 'A001';
   window.__eventMeta = ev.meta || '';
   window.__eventDate = ev.date || '';
   document.title = `${ev.name}｜活動協作`;
   const btn = document.getElementById('eventButtonName');
   if (btn) btn.textContent = ev.name;
-  document.querySelectorAll('.side-current b').forEach(el => { el.textContent = ev.name; });
-  document.querySelectorAll('.hero h1').forEach(el => { el.textContent = ev.name; });
-  if (ev.meta) {
-    document.querySelectorAll('.side-current span').forEach(el => { el.textContent = ev.meta; });
-    document.querySelectorAll('.hero p').forEach(el => { el.textContent = ev.meta; });
-  }
+  document.querySelectorAll('.side-current b, .hero h1').forEach(el => { el.textContent = ev.name; });
+  if (ev.meta) document.querySelectorAll('.side-current span, .hero p').forEach(el => { el.textContent = ev.meta; });
 }
 
-/* 首頁原本整片都是寫死的數字（10 工作組、48 位成員、68% 準備度、
-   13:10 比賽與輪打…）。全部改成從資料算出來，沒有資料就不要假裝有。 */
 function renderHome() {
   const people = directors.length + groups.reduce((n, g) => n + (g[1] ? 1 : 0) + g[2].length, 0);
   const done = progressRecords.filter(t => t.status === 'done').length;
@@ -40,7 +105,6 @@ function renderHome() {
   const roleChip = document.querySelector('.welcome span');
   if (roleChip) roleChip.textContent = currentRole() || '組員';
 
-  // 三張捷徑卡：沒有數字的就別擺一個 0 在那裡
   const cards = document.querySelectorAll('.action-grid button');
   const first = flow[0];
   if (cards[0] && first) {
@@ -54,32 +118,29 @@ function renderHome() {
   const badge = document.querySelector('.category-tabs [data-page="materials"] i');
   if (badge) { badge.textContent = openItems; badge.style.display = openItems ? '' : 'none'; }
 
-  const readyNum = document.querySelectorAll('.home-section header b');
-  readyNum.forEach(b => { b.textContent = ready === null ? '—' : ready + '%'; });
+  document.querySelectorAll('.home-section header b').forEach(b => { b.textContent = ready === null ? '—' : ready + '%'; });
   const bar = document.querySelector('.readiness i');
   if (bar) bar.style.width = (ready || 0) + '%';
 
   const list = document.querySelector('.check-list');
   if (list) list.innerHTML = [
     [`已建立 ${groups.length} 個工作組`, groups.length > 0],
-    [`各組組長已指派`, groups.every(g => g[1])],
+    ['各組組長已指派', groups.every(g => g[1])],
     [progressRecords.length ? `還有 ${doing} 項任務進行中` : '尚未登錄任何工作進度', false],
     [openItems ? `還有 ${openItems} 件物資待處理` : '尚未登錄任何物資', false],
   ].map(([t, ok]) => `<li class="${ok ? 'done' : ''}">${t}</li>`).join('');
 
-  // 細流頁的日期與「現在進行」卡也是寫死的（5 月 24 日、13:10 比賽＋輪打）
   const runDate = document.querySelector('#run .section-title p');
   if (runDate && window.__eventMeta) runDate.textContent = window.__eventMeta;
   const nowCard = document.querySelector('#run .now-card');
   if (nowCard) {
     const today = new Date().toISOString().slice(0, 10);
-    if (window.__eventDate && window.__eventDate === today && flow[0]) {
+    if (window.__eventDate === today && flow[0]) {
       nowCard.querySelector('b').textContent = flow[0].name;
       nowCard.querySelector('small').textContent = flow[0].time;
-    } else nowCard.style.display = 'none';   // 不是活動當天就別假裝有東西正在進行
+    } else nowCard.style.display = 'none';
   }
 
-  // 「我的現場工作」原本也是寫死的，改成從細流撈出我這一組的時段
   const mine = groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);
   const myWorkEl = document.getElementById('myWork');
   if (myWorkEl) {
@@ -93,7 +154,18 @@ function renderHome() {
   }
 }
 
-function liveNotice(text) {
+function setMeetings(names) {
+  const strip = document.getElementById('meetingDates');
+  if (!strip || !names.length) return;
+  strip.innerHTML = names.map((m, i) => `<button class="${i === 0 ? 'active' : ''}">${m}</button>`).join('');
+  activeMeeting = names[0];
+  strip.querySelectorAll('button').forEach(b => b.onclick = () => {
+    strip.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+    activeMeeting = b.textContent; renderTasks();
+  });
+}
+
+function notice(text) {
   const host = document.getElementById('home') || document.body;
   const el = document.createElement('div');
   el.className = 'live-notice bad';
@@ -101,58 +173,75 @@ function liveNotice(text) {
   host.prepend(el);
 }
 
-async function loadData() {
-  let d;
-  try {
-    const res = await fetch(DATA_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    d = await res.json();
-  } catch (err) {
-    liveNotice('讀不到 data/current.json，目前顯示的是示範資料。');
-    console.warn('[五表] 讀不到後台資料：', err);
-    return;
-  }
+/* ── 載入 ─────────────────────────────────────────────────── */
 
-  if (Array.isArray(d.groups) && d.groups.length) {
-    groups = d.groups;
-    localStorage.removeItem('five-groups');      // 示範資料的殘留會蓋掉真實名單
-  }
-  if (Array.isArray(d.core) && d.core.length) {
+function applyAll(d) {
+  if (d.groups && d.groups.length) { groups = d.groups; localStorage.removeItem('five-groups'); }
+  if (d.core && d.core.length) {
     directors.splice(0, directors.length, ...d.core);
     currentPerson = d.core[0][0];
     localStorage.setItem('five-current-person', currentPerson);
   }
-  if (Array.isArray(d.flow) && d.flow.length) flow.splice(0, flow.length, ...d.flow);
-
-  // 討論紀錄的日期原本寫死 5/17、5/18、5/21、會前會
-  if (Array.isArray(d.meetings) && d.meetings.length) {
-    const strip = document.getElementById('meetingDates');
-    if (strip) {
-      strip.innerHTML = d.meetings.map((m, i) => `<button class="${i === 0 ? 'active' : ''}">${m}</button>`).join('');
-      activeMeeting = d.meetings[0];
-      strip.querySelectorAll('button').forEach(b => b.onclick = () => {
-        strip.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
-        activeMeeting = b.textContent; renderTasks();
-      });
-    }
-  }
-
-  if (Array.isArray(d.progress)) {
-    progressRecords.splice(0, progressRecords.length, ...d.progress);
-    localStorage.removeItem('five-progress-v2');
-  }
-  if (Array.isArray(d.materials)) {
-    materials.splice(0, materials.length, ...d.materials);
-    localStorage.removeItem('five-materials');
-  }
-  if (Array.isArray(d.finance)) {
-    budgets.splice(0, budgets.length, ...d.finance);
-    localStorage.removeItem('five-budgets');
-  }
+  if (d.flow && d.flow.length) flow.splice(0, flow.length, ...d.flow);
+  if (d.progress) { progressRecords.splice(0, progressRecords.length, ...d.progress); localStorage.removeItem('five-progress-v2'); }
+  if (d.materials) { materials.splice(0, materials.length, ...d.materials); localStorage.removeItem('five-materials'); }
+  if (d.finance) { budgets.splice(0, budgets.length, ...d.finance); localStorage.removeItem('five-budgets'); }
 
   applyEvent(d.event);
+  if (d.meetings) setMeetings(d.meetings);
   renderPeople(); renderIdentity(); renderTasks(); renderFlow(); renderMaterials(); renderBudget();
   renderHome();
 }
 
-loadData();
+function fromSheet(json) {
+  const t = json.data;
+  const ev = (t['活動'] || [])[0] || {};
+  const order = String(ev['工作組'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  const roster = t['活動人力'] || [];
+  return {
+    event: {
+      id: ev['活動ID'], name: ev['活動名稱'], date: ev['日期'], place: ev['地點'],
+      meta: [ev['日期'], ev['地點']].filter(Boolean).join('・'),
+    },
+    core: roster.filter(r => r['組別'] === '核心').map(r => [r['姓名'], r['角色']]),
+    groups: rowsToGroups(roster, order),
+    meetings: (t['會議'] || []).map(m => m['會議名稱']).filter(Boolean),
+    flow: rowsToFlow(t['活動細流'] || []),
+    progress: (t['工作進度'] || []).map(r => ({
+      meeting: r['會議'], group: r['組別'], owner: r['負責人'], item: r['要完成事項'],
+      update: r['目前進度'], next: r['下一步'], due: r['期限'], status: r['狀態'] || 'todo',
+    })),
+    materials: (t['物資借用'] || []).map(r => [r['物資'], r['組別'], r['數量'], r['攜帶者'], r['備註'] || '', String(r['已還']).toUpperCase() === 'TRUE', '']),
+    finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(r['金額']) || 0, r['登錄人'], r['備註'] || '']),
+  };
+}
+
+async function load() {
+  try {
+    const json = await apiGet();
+    applyAll(fromSheet(json));
+    sheetReady = true;
+    // 寫入攔截：資料一變就整張推回 Sheet
+    const origProgress = saveProgress, origMaterials = saveMaterials;
+    window.saveProgress = function () { origProgress(); apiReplace('工作進度', progressToRows()); };
+    window.saveMaterials = function () { origMaterials(); apiReplace('物資借用', materialsToRows()); };
+    const budgetObserver = () => apiReplace('收支', financeToRows());
+    ['budgetForm', 'deleteBudgetForm'].forEach(id => {
+      const f = document.getElementById(id);
+      if (f) f.addEventListener('submit', () => setTimeout(budgetObserver, 0));
+    });
+    return;
+  } catch (err) {
+    console.warn('[五表] 讀不到試算表端點：', err);
+  }
+  try {
+    const res = await fetch(FALLBACK, { cache: 'no-store' });
+    applyAll(await res.json());
+    notice('連不上試算表，目前顯示的是 repo 裡的備份資料，改動不會寫回去。');
+  } catch (err) {
+    notice('連不上試算表，也讀不到備份資料，目前顯示的是示範資料。');
+    console.warn('[五表] 備份也讀不到：', err);
+  }
+}
+
+load();
