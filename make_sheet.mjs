@@ -61,7 +61,8 @@ for (const [name, headers, rows] of tabs) {
   if (name === '設定') ws.getColumn(1).width = 24;
 }
 
-const out = 'F:/codex/五表/outputs/five-forms/五表後台.xlsx';
+// 檔案在 Excel 裡開著會寫不進去，這時可以傳一個別的路徑進來
+const out = process.argv[2] || 'F:/codex/五表/outputs/five-forms/五表後台.xlsx';
 await wb.xlsx.writeFile(out);
 console.log(`名單來源：${real ? 'roster.local.json（真實名單）' : '示範資料'}`);
 console.log('寫出：' + out);
