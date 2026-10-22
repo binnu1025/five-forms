@@ -12,7 +12,8 @@
  * 人員庫、權限兩個分頁永遠不回傳，Gmail 欄位一律抹掉，收支依角色決定給不給。
  */
 
-const SHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
+// 寫死試算表 ID，這樣獨立腳本（不是綁在試算表上的）也能用
+const SHEET_ID = '1HY_snNwnirjY9DKZMtzA8RY1NF063nd25ymvIGmj8Bc';
 
 // 網頁讀得到的分頁。人員庫與權限不在裡面，它們只在伺服器端用來判斷身分。
 const READABLE = ['活動', '會議', '工作進度', '活動細流', '物資借用', '會後精進', '設定'];
