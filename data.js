@@ -79,161 +79,130 @@ const financeToRows = () => budgets.map(b => ({
 function applyEvent(ev) {
   if (!ev || !ev.name) return;
   window.__eventId = ev.id || 'A001';
+  window.__eventName = ev.name;
   window.__eventMeta = ev.meta || '';
   window.__eventDate = ev.date || '';
   document.title = `${ev.name}｜活動協作`;
   const btn = document.getElementById('eventButtonName');
   if (btn) btn.textContent = ev.name;
-  document.querySelectorAll('.side-current b, .hero h1').forEach(el => { el.textContent = ev.name; });
-  if (ev.meta) document.querySelectorAll('.side-current span, .hero p').forEach(el => { el.textContent = ev.meta; });
+  document.querySelectorAll('.side-current b').forEach(el => { el.textContent = ev.name; });
+  if (ev.meta) document.querySelectorAll('.side-current span').forEach(el => { el.textContent = ev.meta; });
 }
 
 function renderHome() {
-  const people = directors.length + groups.reduce((n, g) => n + (g[1] ? 1 : 0) + g[2].length, 0);
-  const done = progressRecords.filter(t => t.status === 'done').length;
-  const doing = progressRecords.filter(t => t.status === 'doing').length;
-  const openItems = materials.filter(m => m[5] === 'open').length;
-  const ready = progressRecords.length ? Math.round(done / progressRecords.length * 100) : null;
-
-  const stats = document.querySelectorAll('.hero-stats span b');
-  if (stats[0]) stats[0].textContent = groups.length;
-  if (stats[1]) stats[1].textContent = people;
-  if (stats[2]) stats[2].textContent = ready === null ? '—' : ready + '%';
-
-  const hello = document.querySelector('.welcome p');
-  if (hello) hello.textContent = `你好，${currentPerson}`;
-  const roleChip = document.querySelector('.welcome span');
-  if (roleChip) roleChip.textContent = currentRole() || '組員';
-
-  const cards = document.querySelectorAll('.action-grid button');
-  const first = flow[0];
-  if (cards[0] && first) {
-    cards[0].querySelector('b').textContent = String(first.time).split('–')[0];
-    cards[0].querySelector('span').textContent = '活動開始';
-    cards[0].querySelector('strong').textContent = first.name;
-  }
-  if (cards[1]) { cards[1].querySelector('b').textContent = openItems; cards[1].style.display = openItems ? '' : 'none'; }
-  if (cards[2]) {
-    cards[2].querySelector('b').textContent = doing;
-    cards[2].querySelector('strong').textContent = '進行中的工作';   // 原本寫死「跨組任務」
-    cards[2].style.display = doing ? '' : 'none';
-  }
-
-  const badge = document.querySelector('.category-tabs [data-page="materials"] i');
-  if (badge) { badge.textContent = openItems; badge.style.display = openItems ? '' : 'none'; }
-
-  document.querySelectorAll('.home-section header b').forEach(b => { b.textContent = ready === null ? '—' : ready + '%'; });
-  const bar = document.querySelector('.readiness i');
-  if (bar) bar.style.width = (ready || 0) + '%';
-
-  const list = document.querySelector('.check-list');
-  if (list) list.innerHTML = [
-    [`已建立 ${groups.length} 個工作組`, groups.length > 0],
-    ['各組組長已指派', groups.every(g => g[1])],
-    [progressRecords.length ? `還有 ${doing} 項任務進行中` : '尚未登錄任何工作進度', false],
-    [openItems ? `還有 ${openItems} 件物資待處理` : '尚未登錄任何物資', false],
-  ].map(([t, ok]) => `<li class="${ok ? 'done' : ''}">${t}</li>`).join('');
-
-  const runDate = document.querySelector('#run .section-title p');
-  if (runDate && window.__eventMeta) runDate.textContent = window.__eventMeta;
-  const nowCard = document.querySelector('#run .now-card');
-  if (nowCard) {
-    const today = new Date().toISOString().slice(0, 10);
-    if (window.__eventDate === today && flow[0]) {
-      nowCard.querySelector('b').textContent = flow[0].name;
-      nowCard.querySelector('small').textContent = flow[0].time;
-    } else nowCard.style.display = 'none';
-  }
-
+  const today = new Date().toISOString().slice(0, 10);
+  const eventDay = window.__eventDate === today;
   const mine = groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);
-  const myWorkEl = document.getElementById('myWork');
-  if (myWorkEl) {
-    const rows = flow.filter(s => mine.some(g => s.jobs && s.jobs[g]));
-    myWorkEl.innerHTML = rows.length
-      ? rows.map((s, i) => {
-          const g = mine.find(x => s.jobs[x]);
-          return `<article class="${i === 0 ? 'now' : ''}"><time>${s.time}</time><div><small>${g}</small><b>${s.jobs[g]}</b></div></article>`;
-        }).join('')
-      : mine.length
-        ? `<article><div><small>${mine[0]}</small><b>細流裡還沒有你這一組的工作</b></div></article>`
-        : `<article><div><small>${currentRole() || '尚未分組'}</small><b>${currentRole() ? '你不屬於特定工作組，可在細流看全場' : '你還沒有被指派到工作組'}</b></div></article>`;
+  const role = currentRole();
+  const admin = !!role;
+
+  /* 標題列：活動、哪一天、我是誰 */
+  const when = document.getElementById('todayWhen');
+  if (when) when.textContent = eventDay ? '今天就是活動當天'
+    : window.__eventDate ? `${window.__eventMeta || window.__eventDate}${daysAway(window.__eventDate)}` : '';
+  const title = document.getElementById('todayTitle');
+  if (title) title.textContent = window.__eventName || '';
+  const who = document.getElementById('todayRole');
+  if (who) who.textContent = [currentPerson, role || mine.join('、') || '尚未分組'].filter(Boolean).join('・');
+
+  /* 主區：輪到我做什麼 */
+  const focusTitle = document.getElementById('focusTitle');
+  const list = document.getElementById('focusList');
+  const more = document.getElementById('focusMore');
+  const myTasks = progressRecords.filter(t => t.status !== 'done' && (admin || mine.includes(t.group)));
+
+  if (eventDay) {
+    const slot = currentSlot();
+    if (focusTitle) focusTitle.textContent = slot ? `現在・${slot.name}` : '活動流程';
+    const jobs = slot ? Object.entries(slot.jobs || {}).filter(([g]) => admin || mine.includes(g)) : [];
+    if (list) list.innerHTML = jobs.length
+      ? jobs.map(([g, w]) => row(g, w, slot.time)).join('')
+      : empty(slot ? '這個時段沒有你這一組的工作' : '細流裡還沒有時段');
+    if (more) { more.hidden = false; more.textContent = '看全場細流'; more.onclick = () => go('run'); }
+  } else {
+    if (focusTitle) focusTitle.textContent = admin ? '還沒完成的工作'
+      : mine.length ? `${mine.join('、')}還沒完成的` : '這場活動的工作';
+    if (list) list.innerHTML = myTasks.length
+      ? myTasks.slice(0, 4).map(t => row(t.group, t.item, dueLabel(t.due), t.status)).join('')
+      : empty(mine.length || admin ? '目前沒有待辦，都完成了' : '你還沒有被指派到工作組');
+    if (more) {
+      more.hidden = myTasks.length <= 4;
+      more.textContent = `看全部 ${myTasks.length} 項`;
+      more.onclick = () => go('progress');
+    }
   }
-}
 
-/* 物資頁的提示與篩選數字原本寫死「4 件借出中／全部 6／借出中 4／已歸還 2」 */
-function renderMaterialExtras() {
-  const open = materials.filter(m => m[5] === 'open').length;
-  const notice = document.querySelector('#materials .notice');
-  if (notice) {
-    notice.style.display = materials.length ? '' : 'none';
-    const b = notice.querySelector('b');
-    if (b) b.textContent = `${open} 件物資借出中`;
+  /* 需要注意：卡住的、逾期的、沒還的 */
+  const alerts = [];
+  progressRecords.filter(t => t.status === 'blocked' && (admin || mine.includes(t.group)))
+    .forEach(t => alerts.push(['卡住', `${t.group}・${t.item}`, 'progress']));
+  progressRecords.filter(t => t.status !== 'done' && t.due && t.due < today && (admin || mine.includes(t.group)))
+    .forEach(t => alerts.push(['已過期限', `${t.group}・${t.item}`, 'progress']));
+  materials.filter(m => m[5] === 'open' && (admin || mine.includes(m[1])))
+    .forEach(m => alerts.push(['尚未歸還', `${m[1]}・${m[0]} ${m[2]} 件`, 'materials']));
+  const alertBlock = document.getElementById('attentionBlock');
+  const alertList = document.getElementById('attentionList');
+  if (alertBlock) alertBlock.hidden = !alerts.length;
+  if (alertList) alertList.innerHTML = alerts.slice(0, 5).map(([tag, text, page]) =>
+    `<button data-jump="${page}"><span>${tag}</span><b>${text}</b></button>`).join('');
+
+  /* 各組進度：只有幹部需要看全場 */
+  const teams = document.getElementById('teamsBlock');
+  if (teams) {
+    teams.hidden = !admin || !progressRecords.length;
+    if (!teams.hidden) {
+      const sub = document.getElementById('teamsSub');
+      const done = progressRecords.filter(t => t.status === 'done').length;
+      if (sub) sub.textContent = `${done}／${progressRecords.length} 項完成`;
+      const el = document.getElementById('teamsList');
+      if (el) el.innerHTML = groups.map(g => {
+        const all = progressRecords.filter(t => t.group === g[0]);
+        if (!all.length) return '';
+        const ok = all.filter(t => t.status === 'done').length;
+        const blocked = all.some(t => t.status === 'blocked');
+        return `<div class="team-row ${blocked ? 'is-blocked' : ''}"><b>${g[0]}</b>
+          <i><s style="width:${Math.round(ok / all.length * 100)}%"></s></i>
+          <small>${ok}/${all.length}</small></div>`;
+      }).join('');
+    }
   }
-  const pills = document.querySelectorAll('#materials .filter-pills button');
-  if (pills[0]) pills[0].textContent = `全部 ${materials.length}`;
-  if (pills[1]) pills[1].textContent = `借出中 ${open}`;
-  if (pills[2]) pills[2].textContent = `已歸還 ${materials.length - open}`;
-}
 
-/* 會後精進原本是四筆寫死的示範，組名還是早就不存在的「引導組」 */
-function renderReviews(rows) {
-  reviews.splice(0, reviews.length, ...rows.map(r =>
-    [r['組別'], [r['問題'], r['影響'], r['下次做法']].filter(Boolean).join('　→　')]));
-  const el = document.getElementById('reviewList');
-  if (!el) return;
-  el.innerHTML = reviews.length
-    ? reviews.map(r => `<article class="review-card"><h3>！${r[0]}</h3><p>${r[1]}</p></article>`).join('')
-    : '<div class="progress-empty">這場活動還沒有會後精進紀錄</div>';
-}
-
-/* 歷史活動原本是三筆寫死的假活動，而且本次活動不在清單裡 */
-function renderHistories(events, roster, currentId) {
-  const past = events.filter(e => e['活動ID'] && e['活動ID'] !== currentId);
-  histories.splice(0, histories.length, ...past.map(e => {
-    const mine = roster.filter(r => r['活動ID'] === e['活動ID']);
-    const gs = new Set(mine.map(r => r['組別']).filter(g => g && g !== '核心'));
-    return {
-      name: e['活動名稱'], date: e['日期'], place: e['地點'],
-      groups: gs.size, people: mine.length, result: e['狀態'] || '已結案', notes: [],
-    };
-  }));
-  renderHistory();
-  renderEventMenu();
-  const all = document.querySelector('[data-all-history]');
-  if (all) all.style.display = histories.length ? '' : 'none';
-  if (!histories.length && eventHistoryOptions) {
-    eventHistoryOptions.innerHTML = '<p class="dialog-note">目前只有這一場活動，還沒有已結案的紀錄。</p>';
+  /* 快速入口：五表都在這裡，不要只有人力 */
+  const jump = document.getElementById('homeJump');
+  if (jump) {
+    const openItems = materials.filter(m => m[5] === 'open').length;
+    jump.innerHTML = [
+      ['people', '人力表', `${groups.length} 組`],
+      ['progress', '工作進度', progressRecords.length ? `${progressRecords.length} 項` : '尚未登錄'],
+      ['run', '活動細流', flow.length ? `${flow.length} 個時段` : '尚未排定'],
+      ['materials', '物資', materials.length ? `${openItems} 件未還` : '尚未登錄'],
+      ['budget', '收支', budgets.length ? `${budgets.length} 筆` : '尚未登錄'],
+      ['review', '會後精進', reviews.length ? `${reviews.length} 則` : '尚未記錄'],
+    ].map(([p, name, sub]) => `<button data-jump="${p}"><b>${name}</b><span>${sub}</span></button>`).join('');
   }
+
+  document.querySelectorAll('#home [data-jump]').forEach(b => b.onclick = () => go(b.dataset.jump));
 }
 
-/* 指派／物資／預算三個對話框的「工作組」下拉是載入時就填好的，
-   資料換掉之後沒人重填，所以一直停在示範的 10 組。 */
-function refillGroupSelects() {
-  ['assignGroup', 'materialGroup', 'budgetGroup'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const keep = sel.value;
-    sel.innerHTML = groups.map(g => `<option>${g[0]}</option>`).join('');
-    if (groups.some(g => g[0] === keep)) sel.value = keep;
-  });
+function row(group, text, meta, status) {
+  return `<article class="focus-row ${status || ''}"><div><small>${group}</small><b>${text}</b></div><time>${meta || ''}</time></article>`;
+}
+const empty = text => `<p class="focus-empty">${text}</p>`;
+
+function daysAway(date) {
+  const d = Math.round((new Date(date) - new Date(new Date().toISOString().slice(0, 10))) / 86400000);
+  if (d === 0) return '';
+  return d > 0 ? `・還有 ${d} 天` : `・已結束 ${-d} 天`;
 }
 
-/* 指派人員的名單原本來自寫死的 flocks（假人、假信箱），
-   改成人才庫；端點只回姓名與雁群小組，信箱不會離開試算表。 */
-function refillPersonSelect(pool) {
-  const sel = document.getElementById('personSelect');
-  if (!sel || !pool.length) return;
-  const byFlock = {};
-  pool.forEach(p => (byFlock[p['雁群小組'] || '未分組'] ||= []).push(p['姓名']));
-  sel.innerHTML = '<option value="">請選擇雁群與人員</option>' +
-    Object.entries(byFlock).map(([f, names]) =>
-      `<optgroup label="${f}">${names.map(n => `<option>${n}</option>`).join('')}</optgroup>`).join('');
-  const email = document.getElementById('personEmail');
-  if (email) {
-    email.placeholder = '正式版由 Google 登入帶入';
-    const label = email.closest('label');
-    if (label) label.style.display = 'none';   // 唯讀又帶不進來，在手機上只是佔位
-  }
+function currentSlot() {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const toMin = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); };
+  return flow.find(s => {
+    const [a, b] = String(s.time).split('–');
+    return b ? mins >= toMin(a) && mins < toMin(b) : false;
+  }) || flow[0];
 }
 
 function setMeetings(names) {

@@ -38,3 +38,36 @@
 .progress-controls{display:flex;align-items:center;gap:6px}.progress-controls .change-leader{margin:0}.progress-controls .progress-status{white-space:nowrap}
 .field-help{margin-top:2px;color:#87928b;font-size:9px;line-height:1.45}.person-meta{display:flex;align-items:center;gap:10px;margin:-2px 0 13px;padding:10px 12px;border-radius:12px;background:#edf3ef}.person-meta>span{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#dbe9e0;color:var(--green);font-size:10px;font-weight:800}.person-meta small,.person-meta b{display:block}.person-meta small{font-size:8px;color:var(--muted)}.person-meta b{font-size:13px;margin-top:2px}#personEmail[readonly]{background:#f2f4f2;color:#59645e}#personSelect optgroup{font-weight:800;color:var(--green)}#personSelect option{color:var(--ink);font-weight:500}
 .live-notice{margin:0 0 12px;padding:11px 13px;border-radius:12px;background:#e4efe8;color:var(--green);font-size:11px;line-height:1.6}.live-notice.bad{background:#fff1df;color:#8b561c}
+
+/* ── 首頁：回答「現在輪到我做什麼」 ───────────────────────── */
+.today-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.today-head p{margin:0 0 3px;color:var(--green2);font-size:11px;font-weight:700;letter-spacing:.04em}
+.today-head h2{margin:0;font-size:23px;line-height:1.25;letter-spacing:-.02em}
+.today-role{flex:0 0 auto;padding:6px 10px;border-radius:99px;background:#e4efe8;color:var(--green);font-size:10px;font-weight:700;white-space:nowrap}
+.home-block{margin-bottom:16px}
+.home-block header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:9px}
+.home-block h3{margin:0;font-size:15px}
+.home-block header button,.home-block header span{border:0;background:transparent;padding:0;color:var(--green);font-size:11px;font-weight:700}
+.focus-list{display:grid;gap:8px}
+.focus-row{display:flex;align-items:center;gap:12px;padding:14px;border-radius:16px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 14px rgba(30,60,44,.05)}
+.focus-row>div{display:grid;gap:3px;min-width:0}
+.focus-row small{color:var(--green2);font-size:10px;font-weight:700}
+.focus-row b{font-size:15px;line-height:1.45}
+.focus-row time{margin-left:auto;flex:0 0 auto;color:var(--muted);font-size:11px}
+.focus-row.blocked{border-left:3px solid var(--red)}
+.focus-empty{margin:0;padding:18px 14px;border-radius:16px;background:#eef2ef;color:var(--muted);font-size:12px;text-align:center}
+.attention-list{display:grid;gap:7px}
+.attention-list button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 13px;border:0;border-radius:13px;background:#fff1df}
+.attention-list span{flex:0 0 auto;padding:3px 7px;border-radius:6px;background:#f3d29f;color:#7a4a12;font-size:9px;font-weight:800}
+.attention-list b{color:#8b561c;font-size:12px;font-weight:600;min-width:0}
+.teams-list{display:grid;gap:7px}
+.team-row{display:flex;align-items:center;gap:10px;font-size:12px}
+.team-row b{flex:0 0 58px;font-weight:600}
+.team-row i{flex:1;height:6px;border-radius:99px;background:#e3e8e4;overflow:hidden}
+.team-row i s{display:block;height:100%;background:var(--green2);text-decoration:none}
+.team-row.is-blocked i s{background:var(--red)}
+.team-row small{flex:0 0 auto;color:var(--muted);font-size:10px}
+.jump{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:20px}
+.jump button{display:grid;gap:4px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fff}
+.jump b{font-size:13px}
+.jump span{color:var(--muted);font-size:10px}
