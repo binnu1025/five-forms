@@ -189,6 +189,17 @@ function applyAll(d) {
 
   applyEvent(d.event);
   if (d.meetings) setMeetings(d.meetings);
+
+  // 期限的快選鈕原本寫死 5/17、5/18、5/21、活動當天，改成這場活動自己的日期
+  if (typeof dueQuickDays !== 'undefined') {
+    const chips = (d.meetingRows || [])
+      .filter(m => m['日期'])
+      .map(m => [String(m['會議名稱']), String(m['日期']).slice(0, 10)]);
+    if (d.event && d.event.date) chips.push(['活動當天', d.event.date]);
+    const seen = new Set();
+    const uniq = chips.filter(([, v]) => !seen.has(v) && seen.add(v));
+    if (uniq.length) dueQuickDays.splice(0, dueQuickDays.length, ...uniq);
+  }
   renderPeople(); renderIdentity(); renderTasks(); renderFlow(); renderMaterials(); renderBudget();
   renderHome();
 }
@@ -206,6 +217,7 @@ function fromSheet(json) {
     core: roster.filter(r => r['組別'] === '核心').map(r => [r['姓名'], r['角色']]),
     groups: rowsToGroups(roster, order),
     meetings: (t['會議'] || []).map(m => m['會議名稱']).filter(Boolean),
+    meetingRows: (t['會議'] || []).filter(m => m['會議名稱']),
     flow: rowsToFlow(t['活動細流'] || []),
     progress: (t['工作進度'] || []).map(r => ({
       meeting: r['會議'], group: r['組別'], owner: r['負責人'], item: r['要完成事項'],
