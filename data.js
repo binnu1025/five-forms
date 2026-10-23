@@ -184,6 +184,27 @@ function refillPersonSelect(pool) {
   }
 }
 
+/* 前端該藏的東西。伺服器該擋的已經擋了，這裡是不要讓人看到做不到的按鈕。 */
+function lockDownByRole() {
+  const roles = (_raw && _raw.me && _raw.me.roles) || [];
+  const admin = roles.some(r => ADMIN_ROLES.includes(r));
+
+  // 組長只有會長／團長能換
+  if (!admin) document.querySelectorAll('.change-leader').forEach(b => b.remove());
+
+  // 收支總額只有看得到全部的人能看；組長只看自己那組的明細，不該有總額
+  const total = document.getElementById('budgetTotal');
+  const totalBox = total && total.closest('.budget-total, .pledge-card, section, div');
+  if (total && !(_raw && _raw.canSeeFinanceTotal)) {
+    total.textContent = '—';
+    const note = totalBox && totalBox.querySelector('small');
+    if (note) note.textContent = '你看得到自己這一組的收支，總額僅核心幹部可見';
+  }
+
+  // 細流的「＋ 時段」是排流程，屬於幹部的事
+  document.querySelectorAll('#run .add').forEach(b => { b.style.display = admin ? '' : 'none'; });
+}
+
 function renderHome() {
   document.querySelectorAll('#home .sk').forEach(el => el.classList.remove('sk', 'sk-s', 'sk-m', 'sk-l'));
   document.querySelectorAll('#home .sk-row').forEach(el => el.remove());
@@ -365,7 +386,11 @@ function applyAll(d) {
     const uniq = chips.filter(([, v]) => !seen.has(v) && seen.add(v));
     if (uniq.length) dueQuickDays.splice(0, dueQuickDays.length, ...uniq);
   }
+  // 細流的「我的」檢視要知道我是哪幾組；原本 app.js 裡寫死成「環境組」
+  window.__myGroups = ((_raw && _raw.me && _raw.me.groups) || []).filter(g => g && g !== '核心');
+
   renderPeople(); renderIdentity(); renderTasks(); renderFlow(); renderMaterials(); renderBudget();
+  lockDownByRole();
   renderMaterialExtras();
   refillGroupSelects();
   if (d.pool) refillPersonSelect(d.pool);
