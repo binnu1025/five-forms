@@ -113,7 +113,11 @@ function renderHome() {
     cards[0].querySelector('strong').textContent = first.name;
   }
   if (cards[1]) { cards[1].querySelector('b').textContent = openItems; cards[1].style.display = openItems ? '' : 'none'; }
-  if (cards[2]) { cards[2].querySelector('b').textContent = doing; cards[2].style.display = doing ? '' : 'none'; }
+  if (cards[2]) {
+    cards[2].querySelector('b').textContent = doing;
+    cards[2].querySelector('strong').textContent = '進行中的工作';   // 原本寫死「跨組任務」
+    cards[2].style.display = doing ? '' : 'none';
+  }
 
   const badge = document.querySelector('.category-tabs [data-page="materials"] i');
   if (badge) { badge.textContent = openItems; badge.style.display = openItems ? '' : 'none'; }
@@ -150,7 +154,9 @@ function renderHome() {
           const g = mine.find(x => s.jobs[x]);
           return `<article class="${i === 0 ? 'now' : ''}"><time>${s.time}</time><div><small>${g}</small><b>${s.jobs[g]}</b></div></article>`;
         }).join('')
-      : `<article><div><small>${mine[0] || '尚未分組'}</small><b>細流裡還沒有你這一組的工作</b></div></article>`;
+      : mine.length
+        ? `<article><div><small>${mine[0]}</small><b>細流裡還沒有你這一組的工作</b></div></article>`
+        : `<article><div><small>${currentRole() || '尚未分組'}</small><b>${currentRole() ? '你不屬於特定工作組，可在細流看全場' : '你還沒有被指派到工作組'}</b></div></article>`;
   }
 }
 
@@ -197,6 +203,36 @@ function renderHistories(events, roster, currentId) {
   if (all) all.style.display = histories.length ? '' : 'none';
   if (!histories.length && eventHistoryOptions) {
     eventHistoryOptions.innerHTML = '<p class="dialog-note">目前只有這一場活動，還沒有已結案的紀錄。</p>';
+  }
+}
+
+/* 指派／物資／預算三個對話框的「工作組」下拉是載入時就填好的，
+   資料換掉之後沒人重填，所以一直停在示範的 10 組。 */
+function refillGroupSelects() {
+  ['assignGroup', 'materialGroup', 'budgetGroup'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const keep = sel.value;
+    sel.innerHTML = groups.map(g => `<option>${g[0]}</option>`).join('');
+    if (groups.some(g => g[0] === keep)) sel.value = keep;
+  });
+}
+
+/* 指派人員的名單原本來自寫死的 flocks（假人、假信箱），
+   改成人才庫；端點只回姓名與雁群小組，信箱不會離開試算表。 */
+function refillPersonSelect(pool) {
+  const sel = document.getElementById('personSelect');
+  if (!sel || !pool.length) return;
+  const byFlock = {};
+  pool.forEach(p => (byFlock[p['雁群小組'] || '未分組'] ||= []).push(p['姓名']));
+  sel.innerHTML = '<option value="">請選擇雁群與人員</option>' +
+    Object.entries(byFlock).map(([f, names]) =>
+      `<optgroup label="${f}">${names.map(n => `<option>${n}</option>`).join('')}</optgroup>`).join('');
+  const email = document.getElementById('personEmail');
+  if (email) {
+    email.placeholder = '正式版由 Google 登入帶入';
+    const label = email.closest('label');
+    if (label) label.style.display = 'none';   // 唯讀又帶不進來，在手機上只是佔位
   }
 }
 
@@ -248,6 +284,8 @@ function applyAll(d) {
   }
   renderPeople(); renderIdentity(); renderTasks(); renderFlow(); renderMaterials(); renderBudget();
   renderMaterialExtras();
+  refillGroupSelects();
+  if (d.pool) refillPersonSelect(d.pool);
   if (d.reviews) renderReviews(d.reviews);
   if (d.events) renderHistories(d.events, d.roster || [], d.event && d.event.id);
   renderHome();
@@ -276,6 +314,7 @@ function fromSheet(json) {
     finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(String(r['金額']).replace(/[^0-9.-]/g, '')) || 0, r['登錄人'], r['備註'] || '']),
     reviews: t['會後精進'] || [],
     events: t['活動'] || [],
+    pool: t['人員庫'] || [],
     roster,
   };
 }

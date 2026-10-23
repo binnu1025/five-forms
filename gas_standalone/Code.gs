@@ -123,6 +123,10 @@ function doGet(e) {
     const data = {};
     READABLE.forEach(name => { if (name !== '收支') data[name] = rows_(name); });
     data['活動人力'] = roster_(who);
+    // 指派人員時要能從人才庫挑人，但信箱不能外流，所以只給姓名與雁群小組
+    data['人員庫'] = rows_('人員庫')
+      .filter(p => p['姓名'])
+      .map(p => ({ 姓名: p['姓名'], 雁群小組: p['雁群小組'] }));
     const fin = filterFinance_(rows_('收支'), who);
     data['收支'] = fin.rows;
 
