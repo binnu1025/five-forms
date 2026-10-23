@@ -67,7 +67,7 @@ const progressToRows = () => progressRecords.map(t => ({
 }));
 const materialsToRows = () => materials.map(m => ({
   活動ID: window.__eventId || 'A001', 組別: m[1], 物資: m[0], 數量: m[2], 攜帶者: m[3],
-  借出照片: '', 已還: m[5] ? 'TRUE' : 'FALSE', 已歸位: '', 歸還照片: '', 備註: m[4] || '',
+  借出照片: '', 已還: m[5] === 'done' ? 'TRUE' : 'FALSE', 已歸位: '', 歸還照片: '', 備註: m[6] || '',
 }));
 const financeToRows = () => budgets.map(b => ({
   活動ID: window.__eventId || 'A001', 類型: '成本', 組別: b[0], 項目: b[1],
@@ -92,7 +92,7 @@ function renderHome() {
   const people = directors.length + groups.reduce((n, g) => n + (g[1] ? 1 : 0) + g[2].length, 0);
   const done = progressRecords.filter(t => t.status === 'done').length;
   const doing = progressRecords.filter(t => t.status === 'doing').length;
-  const openItems = materials.filter(m => !m[5]).length;
+  const openItems = materials.filter(m => m[5] === 'open').length;
   const ready = progressRecords.length ? Math.round(done / progressRecords.length * 100) : null;
 
   const stats = document.querySelectorAll('.hero-stats span b');
@@ -162,7 +162,7 @@ function renderHome() {
 
 /* 物資頁的提示與篩選數字原本寫死「4 件借出中／全部 6／借出中 4／已歸還 2」 */
 function renderMaterialExtras() {
-  const open = materials.filter(m => !m[5]).length;
+  const open = materials.filter(m => m[5] === 'open').length;
   const notice = document.querySelector('#materials .notice');
   if (notice) {
     notice.style.display = materials.length ? '' : 'none';
@@ -310,7 +310,11 @@ function fromSheet(json) {
       meeting: r['會議'], group: r['組別'], owner: r['負責人'], item: r['要完成事項'],
       update: r['目前進度'], next: r['下一步'], due: r['期限'], status: r['狀態'] || 'todo',
     })),
-    materials: (t['物資借用'] || []).map(r => [r['物資'], r['組別'], r['數量'], r['攜帶者'], r['備註'] || '', String(r['已還']).toUpperCase() === 'TRUE', '']),
+    materials: (t['物資借用'] || []).map(r => {
+      const back = String(r['已還']).toUpperCase() === 'TRUE';
+      return [r['物資'], r['組別'], Number(r['數量']) || 0, r['攜帶者'],
+              back ? '已歸還' : '待歸還', back ? 'done' : 'open', r['備註'] || ''];
+    }),
     finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(String(r['金額']).replace(/[^0-9.-]/g, '')) || 0, r['登錄人'], r['備註'] || '']),
     reviews: t['會後精進'] || [],
     events: t['活動'] || [],
@@ -327,7 +331,7 @@ async function load() {
     // 寫入攔截：資料一變就整張推回 Sheet
     const origProgress = saveProgress, origMaterials = saveMaterials;
     window.saveProgress = function () { origProgress(); apiReplace('工作進度', progressToRows()); };
-    window.saveMaterials = function () { origMaterials(); apiReplace('物資借用', materialsToRows()); };
+    window.saveMaterials = function () { origMaterials(); renderMaterialExtras(); apiReplace('物資借用', materialsToRows()); };
     const budgetObserver = () => apiReplace('收支', financeToRows());
     ['budgetForm', 'deleteBudgetForm'].forEach(id => {
       const f = document.getElementById(id);
