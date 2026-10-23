@@ -313,7 +313,6 @@ function renderHome() {
 
   document.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
     go(b.dataset.jump);
-    document.querySelectorAll('.bottom-nav button').forEach(x => x.classList.toggle('active', x === b));
     window.scrollTo({ top: 0 });
   });
   const navBadge = document.getElementById('navMaterials');
@@ -322,8 +321,21 @@ function renderHome() {
     navBadge.textContent = open;
     navBadge.hidden = !open;
   }
+  /* 換頁時底部列要跟著反亮。app.js 的 go() 原本是點亮已被移除的頂部頁籤，
+     所以不管從哪裡換頁，底部都不會有任何一格亮起來。 */
+  if (!window.__goWrapped) {
+    const origGo = go;
+    window.go = function (id) {
+      origGo(id);
+      document.querySelectorAll('.bottom-nav [data-jump]')
+        .forEach(b => b.classList.toggle('active', b.dataset.jump === id));
+    };
+    window.__goWrapped = true;
+  }
+  go('home');
+
   const logo = document.querySelector('.logo');
-  if (logo) logo.onclick = () => { go('home'); document.querySelectorAll('.bottom-nav button').forEach((x, i) => x.classList.toggle('active', i === 0)); };
+  if (logo) logo.onclick = () => go('home');
 }
 
 function row(group, text, meta, status) {
