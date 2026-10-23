@@ -190,8 +190,11 @@ function renderHome() {
   const today = new Date().toISOString().slice(0, 10);
   const eventDay = window.__eventDate === today;
   const mine = groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);
-  const role = currentRole();
-  const admin = !!role;
+  // 會長／團長是跨活動的固定角色，記在「權限」分頁，不在每場的核心名單裡。
+  // 只看 currentRole() 的話，切到自己沒掛名的活動就會變成「尚未分組」。
+  const globalRoles = (_raw && _raw.me && _raw.me.roles) || [];
+  const role = currentRole() || globalRoles[0] || '';
+  const admin = !!role && (ADMIN_ROLES.includes(role) || globalRoles.some(r => ADMIN_ROLES.includes(r)));
 
   /* 標題列：活動、哪一天、我是誰 */
   const when = document.getElementById('todayWhen');
@@ -324,13 +327,17 @@ function notice(text) {
 /* ── 載入 ─────────────────────────────────────────────────── */
 
 function applyAll(d) {
-  if (d.groups && d.groups.length) { groups = d.groups; localStorage.removeItem('five-groups'); }
+  /* 一律替換，空的也要替換。
+     之前寫成「有資料才換」，切到一場還沒排細流的新活動時，
+     畫面會留著上一場（或 app.js 示範資料）的時段與幹部名單。 */
+  groups = d.groups || [];
+  localStorage.removeItem('five-groups');
+  directors.splice(0, directors.length, ...(d.core || []));
   if (d.core && d.core.length) {
-    directors.splice(0, directors.length, ...d.core);
     currentPerson = d.core[0][0];
     localStorage.setItem('five-current-person', currentPerson);
   }
-  if (d.flow && d.flow.length) flow.splice(0, flow.length, ...d.flow);
+  flow.splice(0, flow.length, ...(d.flow || []));
   if (d.progress) { progressRecords.splice(0, progressRecords.length, ...d.progress); localStorage.removeItem('five-progress-v2'); }
   if (d.materials) { materials.splice(0, materials.length, ...d.materials); localStorage.removeItem('five-materials'); }
   if (d.finance) { budgets.splice(0, budgets.length, ...d.finance); localStorage.removeItem('five-budgets'); }
