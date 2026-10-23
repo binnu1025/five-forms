@@ -189,7 +189,11 @@ function renderHome() {
   document.querySelectorAll('#home .sk-row').forEach(el => el.remove());
   const today = new Date().toISOString().slice(0, 10);
   const eventDay = window.__eventDate === today;
-  const mine = groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);
+  // 我屬於哪幾組，以伺服器回的為準；比對姓名容易因為全名／簡稱不一致而失準
+  const serverGroups = (_raw && _raw.me && _raw.me.groups) || [];
+  const mine = serverGroups.length
+    ? serverGroups.filter(g => g !== '核心')
+    : groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);
   // 會長／團長是跨活動的固定角色，記在「權限」分頁，不在每場的核心名單裡。
   // 只看 currentRole() 的話，切到自己沒掛名的活動就會變成「尚未分組」。
   const globalRoles = (_raw && _raw.me && _raw.me.roles) || [];
@@ -203,7 +207,11 @@ function renderHome() {
   const title = document.getElementById('todayTitle');
   if (title) title.textContent = window.__eventName || '';
   const who = document.getElementById('todayRole');
-  if (who) who.textContent = [currentPerson, role || mine.join('、') || '尚未分組'].filter(Boolean).join('・');
+  // 「王柏儒・組長」看不出是哪一組，有組別就寫成「王柏儒・隊輔組長」
+  const roleLabel = (role === '組長' || role === '組員') && mine.length
+    ? mine[0] + role
+    : role || mine.join('、') || '尚未分組';
+  if (who) who.textContent = [currentPerson, roleLabel].filter(Boolean).join('・');
 
   /* 主區：輪到我做什麼 */
   const focusTitle = document.getElementById('focusTitle');
@@ -333,10 +341,12 @@ function applyAll(d) {
   groups = d.groups || [];
   localStorage.removeItem('five-groups');
   directors.splice(0, directors.length, ...(d.core || []));
-  if (d.core && d.core.length) {
-    currentPerson = d.core[0][0];
-    localStorage.setItem('five-current-person', currentPerson);
-  }
+  /* 目前是誰，要以伺服器認出的身分為準。
+     之前寫成 d.core[0][0]（核心名單的第一個人），結果不管誰登入，
+     畫面都把他當成會長——組長進來會看到幹部才該看的全場視圖。 */
+  const meName = (_raw && _raw.me && _raw.me.name) || '';
+  currentPerson = meName || (d.core && d.core.length ? d.core[0][0] : currentPerson);
+  localStorage.setItem('five-current-person', currentPerson);
   flow.splice(0, flow.length, ...(d.flow || []));
   if (d.progress) { progressRecords.splice(0, progressRecords.length, ...d.progress); localStorage.removeItem('five-progress-v2'); }
   if (d.materials) { materials.splice(0, materials.length, ...d.materials); localStorage.removeItem('five-materials'); }
