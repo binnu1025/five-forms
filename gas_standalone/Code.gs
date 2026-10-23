@@ -40,14 +40,18 @@ function sheet_(name) {
 }
 
 function rows_(name) {
-  const values = sheet_(name).getDataRange().getValues();
+  /* 用 getDisplayValues 而不是 getValues：
+     試算表把「8:00」存成 1899-12-30 的 Date，一旦碰到時區換算就會跑掉
+     （先變成 1899-12-31，修了之後又變成 0:00）。直接取儲存格顯示的文字
+     就沒有這個問題——看到什麼就是什麼。數字欄位在前端再轉回來。 */
+  const values = sheet_(name).getDataRange().getDisplayValues();
   if (values.length < 2) return [];
   const head = values[0].map(String);
   return values.slice(1)
     .filter(r => r.some(c => c !== '' && c !== null))
     .map(r => {
       const o = {};
-      head.forEach((h, i) => { if (h) o[h] = r[i] instanceof Date ? Utilities.formatDate(r[i], 'Asia/Taipei', 'yyyy-MM-dd') : r[i]; });
+      head.forEach((h, i) => { if (h) o[h] = r[i]; });
       return o;
     });
 }

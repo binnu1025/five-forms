@@ -154,6 +154,52 @@ function renderHome() {
   }
 }
 
+/* 物資頁的提示與篩選數字原本寫死「4 件借出中／全部 6／借出中 4／已歸還 2」 */
+function renderMaterialExtras() {
+  const open = materials.filter(m => !m[5]).length;
+  const notice = document.querySelector('#materials .notice');
+  if (notice) {
+    notice.style.display = materials.length ? '' : 'none';
+    const b = notice.querySelector('b');
+    if (b) b.textContent = `${open} 件物資借出中`;
+  }
+  const pills = document.querySelectorAll('#materials .filter-pills button');
+  if (pills[0]) pills[0].textContent = `全部 ${materials.length}`;
+  if (pills[1]) pills[1].textContent = `借出中 ${open}`;
+  if (pills[2]) pills[2].textContent = `已歸還 ${materials.length - open}`;
+}
+
+/* 會後精進原本是四筆寫死的示範，組名還是早就不存在的「引導組」 */
+function renderReviews(rows) {
+  reviews.splice(0, reviews.length, ...rows.map(r =>
+    [r['組別'], [r['問題'], r['影響'], r['下次做法']].filter(Boolean).join('　→　')]));
+  const el = document.getElementById('reviewList');
+  if (!el) return;
+  el.innerHTML = reviews.length
+    ? reviews.map(r => `<article class="review-card"><h3>！${r[0]}</h3><p>${r[1]}</p></article>`).join('')
+    : '<div class="progress-empty">這場活動還沒有會後精進紀錄</div>';
+}
+
+/* 歷史活動原本是三筆寫死的假活動，而且本次活動不在清單裡 */
+function renderHistories(events, roster, currentId) {
+  const past = events.filter(e => e['活動ID'] && e['活動ID'] !== currentId);
+  histories.splice(0, histories.length, ...past.map(e => {
+    const mine = roster.filter(r => r['活動ID'] === e['活動ID']);
+    const gs = new Set(mine.map(r => r['組別']).filter(g => g && g !== '核心'));
+    return {
+      name: e['活動名稱'], date: e['日期'], place: e['地點'],
+      groups: gs.size, people: mine.length, result: e['狀態'] || '已結案', notes: [],
+    };
+  }));
+  renderHistory();
+  renderEventMenu();
+  const all = document.querySelector('[data-all-history]');
+  if (all) all.style.display = histories.length ? '' : 'none';
+  if (!histories.length && eventHistoryOptions) {
+    eventHistoryOptions.innerHTML = '<p class="dialog-note">目前只有這一場活動，還沒有已結案的紀錄。</p>';
+  }
+}
+
 function setMeetings(names) {
   const strip = document.getElementById('meetingDates');
   if (!strip || !names.length) return;
@@ -201,6 +247,9 @@ function applyAll(d) {
     if (uniq.length) dueQuickDays.splice(0, dueQuickDays.length, ...uniq);
   }
   renderPeople(); renderIdentity(); renderTasks(); renderFlow(); renderMaterials(); renderBudget();
+  renderMaterialExtras();
+  if (d.reviews) renderReviews(d.reviews);
+  if (d.events) renderHistories(d.events, d.roster || [], d.event && d.event.id);
   renderHome();
 }
 
@@ -224,7 +273,10 @@ function fromSheet(json) {
       update: r['目前進度'], next: r['下一步'], due: r['期限'], status: r['狀態'] || 'todo',
     })),
     materials: (t['物資借用'] || []).map(r => [r['物資'], r['組別'], r['數量'], r['攜帶者'], r['備註'] || '', String(r['已還']).toUpperCase() === 'TRUE', '']),
-    finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(r['金額']) || 0, r['登錄人'], r['備註'] || '']),
+    finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(String(r['金額']).replace(/[^0-9.-]/g, '')) || 0, r['登錄人'], r['備註'] || '']),
+    reviews: t['會後精進'] || [],
+    events: t['活動'] || [],
+    roster,
   };
 }
 
