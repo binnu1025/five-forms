@@ -60,8 +60,11 @@ const rowsToGroups = (roster, order) => {
     const g = byGroup[r['組別']] || (byGroup[r['組別']] = { lead: '', members: [] });
     if (r['角色'] === '組長') g.lead = r['姓名']; else g.members.push(r['姓名']);
   });
+  // 新建立的活動還沒指派任何人，但「活動」分頁的工作組欄已經有清單，
+  // 這些組要先長出來（組長空白），不然人力表會是空的、也沒地方指派。
   const names = order.length ? order : Object.keys(byGroup);
-  return names.filter(n => byGroup[n]).map(n => [n, byGroup[n].lead, byGroup[n].members]);
+  Object.keys(byGroup).forEach(n => { if (!names.includes(n)) names.push(n); });
+  return names.map(n => [n, (byGroup[n] || {}).lead || '', (byGroup[n] || {}).members || []]);
 };
 
 const rowsToFlow = rows => {
@@ -412,6 +415,108 @@ function renderPicker(events, roster) {
   list.querySelectorAll('[data-event]').forEach(b => b.onclick = () => enterEvent(b.dataset.event));
 }
 
+const ADMIN_ROLES = ['會長', '青年團團長', '活動組長', '副組長', '執行秘書', '台北團長', '新竹團長', '中壢團長'];
+const isAdmin = () => (_raw && _raw.me.roles || []).some(r => ADMIN_ROLES.includes(r));
+
+/* 預設組別取自「設定」分頁；沒有就拿最近一場活動的工作組 */
+function defaultGroups() {
+  const fromSetting = (_raw.data['設定'] || []).find(r => r['項目'] === '預設組別');
+  const list = String((fromSetting || {})['值'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (list.length) return list;
+  const last = (_raw.data['活動'] || []).slice(-1)[0] || {};
+  return String(last['工作組'] || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
+function nextEventId() {
+  const ids = (_raw.data['活動'] || []).map(e => String(e['活動ID'] || ''));
+  const nums = ids.map(x => /^A(\d+)$/.exec(x)).filter(Boolean).map(m => Number(m[1]));
+  return 'A' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+}
+
+let _picked = [];
+
+function paintGroupPicks() {
+  const box = document.getElementById('eventGroups');
+  if (!box) return;
+  box.innerHTML = _picked.map(([name, on]) =>
+    `<button type="button" class="${on ? 'on' : ''}" data-g="${name}">${name}</button>`).join('');
+  box.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
+    const row = _picked.find(x => x[0] === b.dataset.g);
+    row[1] = !row[1];
+    paintGroupPicks();
+  });
+}
+
+function addMeetingRow(name, date) {
+  const box = document.getElementById('eventMeetings');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.className = 'meeting-row';
+  row.innerHTML = `<input class="m-name" placeholder="會議名稱" value="${name || ''}">
+    <input class="m-date" type="date" value="${date || ''}"><button type="button">×</button>`;
+  row.querySelector('button').onclick = () => row.remove();
+  box.appendChild(row);
+}
+
+function openEventDialog() {
+  _picked = defaultGroups().map(n => [n, true]);
+  paintGroupPicks();
+  const box = document.getElementById('eventMeetings');
+  if (box) box.innerHTML = '';
+  addMeetingRow('會前會', '');
+  eventForm.reset();
+  paintGroupPicks();
+  eventDialog.showModal();
+}
+
+async function createEvent(e) {
+  e.preventDefault();
+  const fd = new FormData(eventForm);
+  const groupList = _picked.filter(x => x[1]).map(x => x[0]);
+  if (!groupList.length) return toast('至少要留一個工作組');
+
+  const id = nextEventId();
+  const ev = {
+    活動ID: id, 活動名稱: fd.get('name'), 日期: fd.get('date'),
+    地點: fd.get('place') || '', 狀態: '規劃中', 工作組: groupList.join(','),
+  };
+  const meetings = [...document.querySelectorAll('#eventMeetings .meeting-row')]
+    .map(r => ({ 活動ID: id, 會議名稱: r.querySelector('.m-name').value.trim(),
+                 日期: r.querySelector('.m-date').value }))
+    .filter(m => m['會議名稱']);
+
+  const btn = document.getElementById('eventSubmitting') || eventForm.querySelector('.submit');
+  btn.disabled = true; btn.textContent = '建立中…';
+  try {
+    const ok1 = await apiAppend('活動', [ev]);
+    if (!ok1.ok) throw new Error(ok1.error);
+    if (meetings.length) await apiAppend('會議', meetings);
+    _raw = await apiGet();                       // 重新讀，讓選擇頁與新活動都是最新的
+    renderPicker(_raw.data['活動'] || [], _raw.data['活動人力'] || []);
+    eventDialog.close();
+    enterEvent(id);
+    toast(`${ev['活動名稱']} 已建立`);
+  } catch (err) {
+    toast('建立失敗：' + err.message);
+    console.warn('[五表] 建立活動失敗：', err);
+  } finally {
+    btn.disabled = false; btn.textContent = '建立活動';
+  }
+}
+
+/* 附加而不是整表覆蓋——建立活動不該動到既有的場次 */
+async function apiAppend(sheet, rows) {
+  return withRetry(async () => {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ sheet, who: whoAmI(), rows }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  });
+}
+
 function enterEvent(id) {
   if (!_raw) return;
   applyAll(fromSheet(_raw, id));
@@ -440,6 +545,20 @@ async function load() {
     });
     const back = document.querySelector('[data-current-event]');
     if (back) back.onclick = () => { hideSideMenu(); backToPicker(); };
+    const newBtn = document.getElementById('newEventBtn');
+    if (newBtn) { newBtn.hidden = !isAdmin(); newBtn.onclick = openEventDialog; }
+    if (typeof eventForm !== 'undefined' && eventForm) eventForm.onsubmit = createEvent;
+    const addG = document.getElementById('addGroupBtn');
+    if (addG) addG.onclick = () => {
+      const inp = document.getElementById('newGroupName');
+      const name = inp.value.trim();
+      if (!name) return;
+      if (!_picked.some(x => x[0] === name)) _picked.push([name, true]);
+      inp.value = '';
+      paintGroupPicks();
+    };
+    const addM = document.getElementById('addMeetingBtn');
+    if (addM) addM.onclick = () => addMeetingRow('', '');
     return;
   } catch (err) {
     console.warn('[五表] 讀不到試算表端點：', err);

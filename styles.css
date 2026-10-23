@@ -94,3 +94,19 @@ body.picking .picker{display:block}
 .picker-card.now{border-color:#86aa96;background:linear-gradient(140deg,#1f4e3b,#39755a);color:#fff}
 .picker-card.now small{color:#c8ded3}
 .picker-empty{padding:22px;border-radius:16px;background:#fff1df;color:#8b561c;font-size:12px}
+
+/* 建立活動 */
+.picker-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+.picker-top h1{margin:0}
+.group-picks{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.group-picks button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 11px;color:var(--muted);font-size:11px}
+.group-picks button.on{background:var(--green);border-color:var(--green);color:#fff;font-weight:700}
+.add-group{display:flex;gap:7px;margin-bottom:14px}
+.add-group input{flex:1}
+.add-group button{flex:0 0 auto;border:1px solid var(--line);background:#f7f9f7;border-radius:11px;padding:0 13px;color:var(--green);font-size:12px;font-weight:700}
+.meeting-rows{display:grid;gap:7px;margin-bottom:8px}
+.meeting-row{display:flex;gap:7px}
+.meeting-row input:first-child{flex:1.2}
+.meeting-row input:last-of-type{flex:1}
+.meeting-row button{flex:0 0 auto;border:0;background:#f1f3f2;border-radius:10px;width:38px;color:var(--muted)}
+.add-meeting{width:100%;margin-bottom:16px;border:1px dashed #b7c5bc;border-radius:11px;background:#f9fbf9;padding:10px;color:var(--green);font-size:11px}
