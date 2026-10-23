@@ -204,6 +204,17 @@ function lockDownByRole() {
   // 細流的「＋ 時段」是排流程，屬於幹部的事
   document.querySelectorAll('#run .add').forEach(b => { b.style.display = admin ? '' : 'none'; });
 
+  // 核心幹部不屬於任何工作組，「我的」對他們是死路，直接不顯示
+  const myBtn = document.querySelector('#flowModes [data-mode="mine"]');
+  if (myBtn) {
+    const hasGroup = (window.__myGroups || []).length > 0;
+    myBtn.style.display = hasGroup ? '' : 'none';
+    if (!hasGroup && myBtn.classList.contains('active')) {
+      const all = document.querySelector('#flowModes [data-mode="all"]');
+      if (all) all.click();
+    }
+  }
+
   /* 細流頁的日期與「現在進行」卡原本寫死成 5 月 24 日、13:10 比賽＋輪打。
      這段在 v1.15 修過，v1.18 重寫 renderHome 時又被剪掉了。 */
   const runDate = document.querySelector('#run .section-title p');
