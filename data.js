@@ -13,24 +13,39 @@ const whoAmI = () => localStorage.getItem('five-gmail') || 'binnu1025@gmail.com'
 
 let sheetReady = false;
 
+/* Apps Script 偶爾會直接 Failed to fetch（實測 6 次有 1 次），
+   失敗就安靜退回備份資料、寫入也會掉，使用者不會發現。所以重試。 */
+async function withRetry(fn, tries = 3) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (err) { last = err; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+  }
+  throw last;
+}
+
 async function apiGet() {
-  const res = await fetch(`${API}?who=${encodeURIComponent(whoAmI())}&t=${Date.now()}`);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || '端點回報失敗');
-  return json;
+  return withRetry(async () => {
+    const res = await fetch(`${API}?who=${encodeURIComponent(whoAmI())}&t=${Date.now()}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || '端點回報失敗');
+    return json;
+  });
 }
 
 /* 整張表換掉，不用去追哪一列改了哪一欄 */
 async function apiReplace(sheet, rows) {
   if (!sheetReady) return;
   try {
-    const res = await fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ sheet, who: whoAmI(), replace: true, rows }),
+    const out = await withRetry(async () => {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ sheet, who: whoAmI(), replace: true, rows }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
     });
-    const out = await res.json();
     if (!out.ok) toast('寫回試算表失敗：' + out.error);
   } catch (err) {
     toast('寫回試算表失敗，改動只留在這支手機上');

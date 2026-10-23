@@ -30,7 +30,7 @@ let materials=JSON.parse(localStorage.getItem('five-materials')||'null')||[['計
 let budgets=JSON.parse(localStorage.getItem('five-budgets')||'null')||[['報到組','名牌與簽到用品',1800,'綺晨',''],['佈置組','指示牌與舞台佈置',5200,'沛筠',''],['醫療組','急救耗材',1200,'秉芸',''],['攝影組','備用電池與記憶卡',2400,'智為','']];
 const histories=[{name:'2026 秋季友誼賽',date:'2026/10/18',place:'新北市民活動中心',groups:10,people:46,result:'已完成',notes:['報到口移到入口後動線更順','雨天備案需提前公告']},{name:'2026 感恩餐會',date:'2026/03/30',place:'風尚會館',groups:8,people:35,result:'已完成',notes:['餐桌座位表需同步給報到與引導','拍照清單要先跟主持對齊']},{name:'2025 夏日親子日',date:'2025/07/12',place:'陽明公園',groups:9,people:41,result:'已完成',notes:['戶外飲水量需增加','兒童組別需設置明確集合點']}];
 const reviews=[['報到組','新朋友較多，會前需先確認組員並清楚說明工作。'],['引導組','報到位置可改到入口附近，會前確認完整動線。'],['交通組','下次可先畫出上下客區，避免與行人交錯。'],['環境組','活動前、中、後各安排巡視，指定物資歸位人。']];
-const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s), toastEl=$('#toast');document.querySelector('link[rel="stylesheet"]').href='styles.css?v=1.10';
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s), toastEl=$('#toast');
 function toast(s){toastEl.textContent=s;toastEl.classList.add('show');setTimeout(()=>toastEl.classList.remove('show'),1800)}
 function currentRole(){return directors.find(x=>x[0]===currentPerson)?.[1]||null}
 function permittedGroups(){const role=currentRole();if(role)return groups.map(g=>g[0]);return groups.filter(g=>g[1]===currentPerson||g[2].includes(currentPerson)).map(g=>g[0])}
