@@ -89,6 +89,81 @@ function applyEvent(ev) {
   if (ev.meta) document.querySelectorAll('.side-current span').forEach(el => { el.textContent = ev.meta; });
 }
 
+/* 物資頁的提示與篩選數字原本寫死「4 件借出中／全部 6／借出中 4／已歸還 2」 */
+function renderMaterialExtras() {
+  const open = materials.filter(m => m[5] === 'open').length;
+  const notice = document.querySelector('#materials .notice');
+  if (notice) {
+    notice.style.display = materials.length ? '' : 'none';
+    const b = notice.querySelector('b');
+    if (b) b.textContent = `${open} 件物資借出中`;
+  }
+  const pills = document.querySelectorAll('#materials .filter-pills button');
+  if (pills[0]) pills[0].textContent = `全部 ${materials.length}`;
+  if (pills[1]) pills[1].textContent = `借出中 ${open}`;
+  if (pills[2]) pills[2].textContent = `已歸還 ${materials.length - open}`;
+}
+
+/* 會後精進原本是四筆寫死的示範，組名還是早就不存在的「引導組」 */
+function renderReviews(rows) {
+  reviews.splice(0, reviews.length, ...rows.map(r =>
+    [r['組別'], [r['問題'], r['影響'], r['下次做法']].filter(Boolean).join('　→　')]));
+  const el = document.getElementById('reviewList');
+  if (!el) return;
+  el.innerHTML = reviews.length
+    ? reviews.map(r => `<article class="review-card"><h3>！${r[0]}</h3><p>${r[1]}</p></article>`).join('')
+    : '<div class="progress-empty">這場活動還沒有會後精進紀錄</div>';
+}
+
+/* 歷史活動原本是三筆寫死的假活動，而且本次活動不在清單裡 */
+function renderHistories(events, roster, currentId) {
+  const past = events.filter(e => e['活動ID'] && e['活動ID'] !== currentId);
+  histories.splice(0, histories.length, ...past.map(e => {
+    const mine = roster.filter(r => r['活動ID'] === e['活動ID']);
+    const gs = new Set(mine.map(r => r['組別']).filter(g => g && g !== '核心'));
+    return {
+      name: e['活動名稱'], date: e['日期'], place: e['地點'],
+      groups: gs.size, people: mine.length, result: e['狀態'] || '已結案', notes: [],
+    };
+  }));
+  renderHistory();
+  renderEventMenu();
+  const all = document.querySelector('[data-all-history]');
+  if (all) all.style.display = histories.length ? '' : 'none';
+  if (!histories.length && typeof eventHistoryOptions !== 'undefined' && eventHistoryOptions) {
+    eventHistoryOptions.innerHTML = '<p class="dialog-note">目前只有這一場活動，還沒有已結案的紀錄。</p>';
+  }
+}
+
+/* 指派／物資／預算三個對話框的「工作組」下拉是載入時就填好的，
+   資料換掉之後沒人重填，所以一直停在示範的 10 組。 */
+function refillGroupSelects() {
+  ['assignGroup', 'materialGroup', 'budgetGroup'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const keep = sel.value;
+    sel.innerHTML = groups.map(g => `<option>${g[0]}</option>`).join('');
+    if (groups.some(g => g[0] === keep)) sel.value = keep;
+  });
+}
+
+/* 指派人員的名單原本來自寫死的 flocks（假人、假信箱），
+   改成人才庫；端點只回姓名與雁群小組，信箱不會離開試算表。 */
+function refillPersonSelect(pool) {
+  const sel = document.getElementById('personSelect');
+  if (!sel || !pool.length) return;
+  const byFlock = {};
+  pool.forEach(p => (byFlock[p['雁群小組'] || '未分組'] ||= []).push(p['姓名']));
+  sel.innerHTML = '<option value="">請選擇雁群與人員</option>' +
+    Object.entries(byFlock).map(([f, names]) =>
+      `<optgroup label="${f}">${names.map(n => `<option>${n}</option>`).join('')}</optgroup>`).join('');
+  const email = document.getElementById('personEmail');
+  if (email) {
+    const label = email.closest('label');
+    if (label) label.style.display = 'none';   // 唯讀又帶不進來，在手機上只是佔位
+  }
+}
+
 function renderHome() {
   const today = new Date().toISOString().slice(0, 10);
   const eventDay = window.__eventDate === today;
@@ -282,7 +357,7 @@ function fromSheet(json) {
     materials: (t['物資借用'] || []).map(r => {
       const back = String(r['已還']).toUpperCase() === 'TRUE';
       return [r['物資'], r['組別'], Number(r['數量']) || 0, r['攜帶者'],
-              back ? '已歸還' : '待歸還', back ? 'done' : 'open', r['備註'] || ''];
+              back ? '已歸還' : '待歸還', back ? 'done' : 'open', ''];  // 第 7 格是照片，不是備註
     }),
     finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(String(r['金額']).replace(/[^0-9.-]/g, '')) || 0, r['登錄人'], r['備註'] || '']),
     reviews: t['會後精進'] || [],
