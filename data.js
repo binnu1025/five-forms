@@ -3,10 +3,9 @@
    所以 Sheet 可以只分享給會長與團長。
 
    在 app.js 之後載入，直接沿用它的 groups / flow / render* 等全域。
-   端點掛掉就退回 repo 裡的 data/current.json，再不行才留在示範資料。 */
+   讀不到就在選擇頁說清楚，不要退回任何假資料。 */
 
 const API = 'https://script.google.com/macros/s/AKfycbwpJuvmtI_4jMG6NcEb_JtD15xg75Lzow_qQcA5yKu1gzBEWQ8fK4uDwLK3MtQzMBRDRg/exec';
-const FALLBACK = 'data/current.json';
 
 // 目前是誰在用。接上 Google 登入後這裡換成 id_token，identify_() 已經準備好了。
 const whoAmI = () => localStorage.getItem('five-gmail') || 'binnu1025@gmail.com';
@@ -355,11 +354,13 @@ function applyAll(d) {
   renderHome();
 }
 
-function fromSheet(json) {
+function fromSheet(json, eventId) {
   const t = json.data;
-  const ev = (t['活動'] || [])[0] || {};
+  const all = t['活動'] || [];
+  const ev = all.find(e => e['活動ID'] === eventId) || all[0] || {};
+  const only = rows => rows.filter(r => !r['活動ID'] || r['活動ID'] === ev['活動ID']);
   const order = String(ev['工作組'] || '').split(',').map(s => s.trim()).filter(Boolean);
-  const roster = t['活動人力'] || [];
+  const roster = only(t['活動人力'] || []);
   return {
     event: {
       id: ev['活動ID'], name: ev['活動名稱'], date: ev['日期'], place: ev['地點'],
@@ -367,52 +368,84 @@ function fromSheet(json) {
     },
     core: roster.filter(r => r['組別'] === '核心').map(r => [r['姓名'], r['角色']]),
     groups: rowsToGroups(roster, order),
-    meetings: (t['會議'] || []).map(m => m['會議名稱']).filter(Boolean),
-    meetingRows: (t['會議'] || []).filter(m => m['會議名稱']),
-    flow: rowsToFlow(t['活動細流'] || []),
-    progress: (t['工作進度'] || []).map(r => ({
+    meetings: only(t['會議'] || []).map(m => m['會議名稱']).filter(Boolean),
+    meetingRows: only(t['會議'] || []).filter(m => m['會議名稱']),
+    flow: rowsToFlow(only(t['活動細流'] || [])),
+    progress: only(t['工作進度'] || []).map(r => ({
       meeting: r['會議'], group: r['組別'], owner: r['負責人'], item: r['要完成事項'],
       update: r['目前進度'], next: r['下一步'], due: r['期限'], status: r['狀態'] || 'todo',
     })),
-    materials: (t['物資借用'] || []).map(r => {
+    materials: only(t['物資借用'] || []).map(r => {
       const back = String(r['已還']).toUpperCase() === 'TRUE';
       return [r['物資'], r['組別'], Number(r['數量']) || 0, r['攜帶者'],
               back ? '已歸還' : '待歸還', back ? 'done' : 'open', ''];  // 第 7 格是照片，不是備註
     }),
-    finance: (t['收支'] || []).map(r => [r['組別'], r['項目'], Number(String(r['金額']).replace(/[^0-9.-]/g, '')) || 0, r['登錄人'], r['備註'] || '']),
-    reviews: t['會後精進'] || [],
+    finance: only(t['收支'] || []).map(r => [r['組別'], r['項目'], Number(String(r['金額']).replace(/[^0-9.-]/g, '')) || 0, r['登錄人'], r['備註'] || '']),
+    reviews: only(t['會後精進'] || []),
     events: t['活動'] || [],
     pool: t['人員庫'] || [],
     roster,
   };
 }
 
+let _raw = null;
+
+function renderPicker(events, roster) {
+  const list = document.getElementById('pickerList');
+  if (!list) return;
+  if (!events.length) {
+    list.innerHTML = '<div class="picker-empty">試算表的「活動」分頁還沒有任何一場活動。</div>';
+    return;
+  }
+  const live = events.filter(e => e['狀態'] !== '已結案');
+  const past = events.filter(e => e['狀態'] === '已結案');
+  const card = (e, now) => {
+    const mine = roster.filter(r => r['活動ID'] === e['活動ID']);
+    const gs = new Set(mine.map(r => r['組別']).filter(g => g && g !== '核心'));
+    const bits = [e['日期'], e['地點'], gs.size ? `${gs.size} 組・${mine.length} 人` : ''].filter(Boolean);
+    return `<button class="picker-card ${now ? 'now' : ''}" data-event="${e['活動ID']}">
+      <b>${e['活動名稱'] || '（未命名活動）'}</b><small>${bits.join('・')}</small></button>`;
+  };
+  list.innerHTML =
+    (live.length ? `<p class="picker-group">進行中</p>` + live.map(e => card(e, true)).join('') : '') +
+    (past.length ? `<p class="picker-group">已結案</p>` + past.map(e => card(e, false)).join('') : '');
+  list.querySelectorAll('[data-event]').forEach(b => b.onclick = () => enterEvent(b.dataset.event));
+}
+
+function enterEvent(id) {
+  if (!_raw) return;
+  applyAll(fromSheet(_raw, id));
+  document.body.classList.remove('picking');
+  go('home');
+  window.scrollTo({ top: 0 });
+}
+
+function backToPicker() {
+  document.body.classList.add('picking');
+  window.scrollTo({ top: 0 });
+}
+
 async function load() {
+  document.body.classList.add('picking');
   try {
-    const json = await apiGet();
-    applyAll(fromSheet(json));
+    _raw = await apiGet();
     sheetReady = true;
-    // 寫入攔截：資料一變就整張推回 Sheet
+    renderPicker(_raw.data['活動'] || [], _raw.data['活動人力'] || []);
     const origProgress = saveProgress, origMaterials = saveMaterials;
     window.saveProgress = function () { origProgress(); apiReplace('工作進度', progressToRows()); };
     window.saveMaterials = function () { origMaterials(); renderMaterialExtras(); apiReplace('物資借用', materialsToRows()); };
-    const budgetObserver = () => apiReplace('收支', financeToRows());
     ['budgetForm', 'deleteBudgetForm'].forEach(id => {
       const f = document.getElementById(id);
-      if (f) f.addEventListener('submit', () => setTimeout(budgetObserver, 0));
+      if (f) f.addEventListener('submit', () => setTimeout(() => apiReplace('收支', financeToRows()), 0));
     });
+    const back = document.querySelector('[data-current-event]');
+    if (back) back.onclick = () => { hideSideMenu(); backToPicker(); };
     return;
   } catch (err) {
     console.warn('[五表] 讀不到試算表端點：', err);
   }
-  try {
-    const res = await fetch(FALLBACK, { cache: 'no-store' });
-    applyAll(await res.json());
-    notice('連不上試算表，目前顯示的是 repo 裡的備份資料，改動不會寫回去。');
-  } catch (err) {
-    notice('連不上試算表，也讀不到備份資料，目前顯示的是示範資料。');
-    console.warn('[五表] 備份也讀不到：', err);
-  }
+  const list = document.getElementById('pickerList');
+  if (list) list.innerHTML = '<div class="picker-empty">連不上試算表，請稍後重新整理。<br>（網路不穩時偶爾會這樣，重試三次都失敗才會看到這句）</div>';
 }
 
 load();

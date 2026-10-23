@@ -78,3 +78,19 @@
 .sk-l{width:230px;height:23px}
 .sk-row{opacity:.75}
 @keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+
+/* 活動選擇頁：一進來先挑活動，不要預設載入某一場 */
+body.picking .mobile-head .event,body.picking main,body.picking .bottom-nav,body.picking .category-tabs{display:none}
+.picker{display:none;padding:26px 16px 40px}
+body.picking .picker{display:block}
+.picker-inner{max-width:560px;margin:0 auto}
+.picker-inner p{margin:0 0 4px;color:var(--green2);font-size:11px;font-weight:800;letter-spacing:.08em}
+.picker-inner h1{margin:0 0 20px;font-size:27px;letter-spacing:-.03em}
+.picker-list{display:grid;gap:10px}
+.picker-group{margin:18px 0 2px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.06em}
+.picker-card{display:grid;gap:5px;width:100%;text-align:left;padding:17px;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 5px 18px rgba(30,60,44,.05)}
+.picker-card b{font-size:16px}
+.picker-card small{color:var(--muted);font-size:11px}
+.picker-card.now{border-color:#86aa96;background:linear-gradient(140deg,#1f4e3b,#39755a);color:#fff}
+.picker-card.now small{color:#c8ded3}
+.picker-empty{padding:22px;border-radius:16px;background:#fff1df;color:#8b561c;font-size:12px}
