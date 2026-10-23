@@ -95,6 +95,8 @@ function identify_(params) {
 }
 
 function canSeeAllFinance_(who) {
+  // 財務組的人看得到全部，不管他在表上掛的是組長還是組員
+  if (who.groups.indexOf('財務') !== -1 || who.groups.indexOf('財務組') !== -1) return true;
   return who.roles.some(r => FULL_FINANCE_ROLES.indexOf(r) !== -1);
 }
 
