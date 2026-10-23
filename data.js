@@ -102,6 +102,9 @@ function renderMaterialExtras() {
   if (pills[0]) pills[0].textContent = `全部 ${materials.length}`;
   if (pills[1]) pills[1].textContent = `借出中 ${open}`;
   if (pills[2]) pills[2].textContent = `已歸還 ${materials.length - open}`;
+  // 頁籤上那顆紅點原本寫死 3
+  const badge = document.querySelector('.category-tabs [data-page="materials"] i');
+  if (badge) { badge.textContent = open; badge.style.display = open ? '' : 'none'; }
 }
 
 /* 會後精進原本是四筆寫死的示範，組名還是早就不存在的「引導組」 */
