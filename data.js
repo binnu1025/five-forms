@@ -168,6 +168,8 @@ function refillPersonSelect(pool) {
 }
 
 function renderHome() {
+  document.querySelectorAll('#home .sk').forEach(el => el.classList.remove('sk', 'sk-s', 'sk-m', 'sk-l'));
+  document.querySelectorAll('#home .sk-row').forEach(el => el.remove());
   const today = new Date().toISOString().slice(0, 10);
   const eventDay = window.__eventDate === today;
   const mine = groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);

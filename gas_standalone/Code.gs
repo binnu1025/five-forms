@@ -39,22 +39,46 @@ function sheet_(name) {
   return s;
 }
 
+/* 原本每呼叫一次 rows_() 就往試算表跑一趟，一個請求要跑 13 趟（人員庫、
+   活動人力還各讀兩次），這是 5 秒延遲的主因。改成一次 batchGet 把所有
+   分頁抓回來，整個請求只跑一趟。
+
+   _sheets 是這次執行的區域變數，每個請求都重新抓，不是快取。 */
+let _sheets = null;
+
+function allSheets_() {
+  if (_sheets) return _sheets;
+  _sheets = {};
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const names = ss.getSheets().map(sh => sh.getName());
+  try {
+    const res = Sheets.Spreadsheets.Values.batchGet(SHEET_ID, {
+      ranges: names.map(n => "'" + n.replace(/'/g, "''") + "'"),
+      valueRenderOption: 'FORMATTED_VALUE',
+      dateTimeRenderOption: 'FORMATTED_STRING',
+    });
+    (res.valueRanges || []).forEach((vr, i) => { _sheets[names[i]] = vr.values || []; });
+  } catch (err) {
+    // 進階服務不可用時退回逐張讀，慢但不會壞
+    names.forEach(n => { _sheets[n] = ss.getSheetByName(n).getDataRange().getDisplayValues(); });
+  }
+  return _sheets;
+}
+
 function rows_(name) {
-  /* 用 getDisplayValues 而不是 getValues：
-     試算表把「8:00」存成 1899-12-30 的 Date，一旦碰到時區換算就會跑掉
-     （先變成 1899-12-31，修了之後又變成 0:00）。直接取儲存格顯示的文字
-     就沒有這個問題——看到什麼就是什麼。數字欄位在前端再轉回來。 */
-  const values = sheet_(name).getDataRange().getDisplayValues();
+  const values = allSheets_()[name];
+  if (!values) throw new Error('找不到分頁：' + name);
   if (values.length < 2) return [];
   const head = values[0].map(String);
   return values.slice(1)
-    .filter(r => r.some(c => c !== '' && c !== null))
+    .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
     .map(r => {
       const o = {};
-      head.forEach((h, i) => { if (h) o[h] = r[i]; });
+      head.forEach((h, i) => { if (h) o[h] = r[i] === undefined ? '' : r[i]; });
       return o;
     });
 }
+
 
 /**
  * 認出呼叫者是誰。有 Google 登入就用 id_token（可信），
