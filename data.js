@@ -120,8 +120,8 @@ function renderMaterialExtras() {
   if (pills[1]) pills[1].textContent = `借出中 ${open}`;
   if (pills[2]) pills[2].textContent = `已歸還 ${materials.length - open}`;
   // 頁籤上那顆紅點原本寫死 3
-  const badge = document.querySelector('.category-tabs [data-page="materials"] i');
-  if (badge) { badge.textContent = open; badge.style.display = open ? '' : 'none'; }
+  const badge = document.getElementById('navMaterials');
+  if (badge) { badge.textContent = open; badge.hidden = !open; }
 }
 
 /* 會後精進原本是四筆寫死的示範，組名還是早就不存在的「引導組」 */
@@ -311,21 +311,19 @@ function renderHome() {
     }
   }
 
-  /* 快速入口：五表都在這裡，不要只有人力 */
-  const jump = document.getElementById('homeJump');
-  if (jump) {
-    const openItems = materials.filter(m => m[5] === 'open').length;
-    jump.innerHTML = [
-      ['people', '人力表', `${groups.length} 組`],
-      ['progress', '工作進度', progressRecords.length ? `${progressRecords.length} 項` : '尚未登錄'],
-      ['run', '活動細流', flow.length ? `${flow.length} 個時段` : '尚未排定'],
-      ['materials', '物資', materials.length ? `${openItems} 件未還` : '尚未登錄'],
-      ['budget', '收支', budgets.length ? `${budgets.length} 筆` : '尚未登錄'],
-      ['review', '會後精進', reviews.length ? `${reviews.length} 則` : '尚未記錄'],
-    ].map(([p, name, sub]) => `<button data-jump="${p}"><b>${name}</b><span>${sub}</span></button>`).join('');
+  document.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
+    go(b.dataset.jump);
+    document.querySelectorAll('.bottom-nav button').forEach(x => x.classList.toggle('active', x === b));
+    window.scrollTo({ top: 0 });
+  });
+  const navBadge = document.getElementById('navMaterials');
+  if (navBadge) {
+    const open = materials.filter(m => m[5] === 'open').length;
+    navBadge.textContent = open;
+    navBadge.hidden = !open;
   }
-
-  document.querySelectorAll('#home [data-jump]').forEach(b => b.onclick = () => go(b.dataset.jump));
+  const logo = document.querySelector('.logo');
+  if (logo) logo.onclick = () => { go('home'); document.querySelectorAll('.bottom-nav button').forEach((x, i) => x.classList.toggle('active', i === 0)); };
 }
 
 function row(group, text, meta, status) {

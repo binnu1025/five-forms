@@ -110,3 +110,9 @@ body.picking .picker{display:block}
 .meeting-row input:last-of-type{flex:1}
 .meeting-row button{flex:0 0 auto;border:0;background:#f1f3f2;border-radius:10px;width:38px;color:var(--muted)}
 .add-meeting{width:100%;margin-bottom:16px;border:1px dashed #b7c5bc;border-radius:11px;background:#f9fbf9;padding:10px;color:var(--green);font-size:11px}
+
+/* 底部列改成首頁＋五表，六格；紅點改掛在這裡 */
+.bottom-nav{grid-template-columns:repeat(6,1fr)}
+.bottom-nav button{position:relative;font-size:9px}
+.bottom-nav button span{font-size:17px}
+.bottom-nav button i{position:absolute;top:2px;right:50%;transform:translateX(16px);display:grid;place-items:center;min-width:15px;height:15px;padding:0 3px;border-radius:99px;background:var(--red);color:#fff;font-style:normal;font-size:9px}
