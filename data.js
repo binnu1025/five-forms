@@ -192,6 +192,16 @@ function lockDownByRole() {
   // 組長只有會長／團長能換
   if (!admin) document.querySelectorAll('.change-leader').forEach(b => b.remove());
 
+  // 組長只能調整自己那組：別組的「＋ 加入組員」拿掉
+  if (!admin) {
+    const leads = (_raw && _raw.me && _raw.me.leads) || [];
+    document.querySelectorAll('[data-group]').forEach(b => {
+      if (!leads.includes(b.dataset.group)) b.remove();
+    });
+    const addBtn = document.querySelector('#people .add');
+    if (addBtn) addBtn.style.display = leads.length ? '' : 'none';
+  }
+
   // 收支總額只有看得到全部的人能看；組長只看自己那組的明細，不該有總額
   const total = document.getElementById('budgetTotal');
   const totalBox = total && total.closest('.budget-total, .pledge-card, section, div');
@@ -627,6 +637,23 @@ async function load() {
     _raw = await apiGet();
     sheetReady = true;
     renderPicker(_raw.data['活動'] || [], _raw.data['活動人力'] || []);
+    // 指派人員：原本只存在瀏覽器裡，現在要寫回試算表
+    if (typeof assignForm !== 'undefined' && assignForm) {
+      const origAssign = assignForm.onsubmit;
+      assignForm.onsubmit = async e => {
+        const fd = new FormData(assignForm);
+        const row = {
+          活動ID: window.__eventId || 'A001', Gmail: '',   // 信箱由伺服器從人員庫補
+          姓名: fd.get('name'), 組別: fd.get('group'), 角色: fd.get('role'),
+        };
+        if (origAssign) origAssign.call(assignForm, e);
+        const out = await apiAppend('活動人力', [row]);
+        if (!out.ok) { toast(out.error); return; }
+        _raw = await apiGet();
+        applyAll(fromSheet(_raw, window.__eventId));
+      };
+    }
+
     const origProgress = saveProgress, origMaterials = saveMaterials;
     window.saveProgress = function () { origProgress(); apiReplace('工作進度', progressToRows()); };
     window.saveMaterials = function () { origMaterials(); renderMaterialExtras(); apiReplace('物資借用', materialsToRows()); };

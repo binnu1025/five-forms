@@ -30,7 +30,8 @@ const WRITABLE = {
   '活動細流': ['活動ID', '開始', '結束', '全體流程', '組別', '該組工作'],
   '設定':     ['項目', '值', '說明'],
 };
-const ADMIN_ONLY = ['活動', '活動人力', '會議', '活動細流', '設定'];
+const ADMIN_ONLY = ['活動', '會議', '活動細流', '設定'];
+// 活動人力不整張鎖死：核心幹部可以動任何一組，組長只能加自己那組的組員
 // 這些角色看得到全部組別的收支與總額
 const FULL_FINANCE_ROLES = ['會長', '青年團團長', '活動組長', '副組長', '財務長'];
 
@@ -190,6 +191,31 @@ function doPost(e) {
 
     const sh = sheet_(name);
     const incoming = body.rows || [body.row];   // rows：一次寫多列
+
+    if (name === '活動人力' && !isAdmin_(who)) {
+      // 組長只能加自己那組的「組員」，不能動別組、也不能指派組長
+      if (body.replace) return json_({ ok: false, error: '只有核心幹部能整批覆寫人力' });
+      for (const row of incoming) {
+        const g = String(row['組別'] || '');
+        if (who.leads.indexOf(g) === -1) {
+          return json_({ ok: false, error: '你只能調整「' + (who.leads.join('、') || '自己帶的組') + '」的組員' });
+        }
+        if (String(row['角色']) !== '組員') {
+          return json_({ ok: false, error: '組長由會長或團長指派' });
+        }
+      }
+    }
+
+    // 前端挑人時只拿得到姓名（信箱刻意不外流），這裡從人員庫補回來
+    if (name === '活動人力') {
+      const pool = rows_('人員庫');
+      incoming.forEach(row => {
+        if (!row['Gmail'] && row['姓名']) {
+          const hit = pool.find(p => String(p['姓名']) === String(row['姓名']));
+          if (hit) row['Gmail'] = hit['Gmail'];
+        }
+      });
+    }
 
     // replace：把舊資料整個換掉，不要一直往下疊
     if (body.replace) {
