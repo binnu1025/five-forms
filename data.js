@@ -306,89 +306,114 @@ function renderTasksFlat() {
     b.onclick = () => openProgressEdit(Number(b.dataset.progressEdit)));
 }
 
+function eventPhase() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!window.__eventDate) return 'before';
+  if (window.__eventDate === today) return 'during';
+  return window.__eventDate > today ? 'before' : 'after';
+}
+
 function renderHome() {
   document.querySelectorAll('#home .sk').forEach(el => el.classList.remove('sk', 'sk-s', 'sk-m', 'sk-l'));
   document.querySelectorAll('#home .sk-row').forEach(el => el.remove());
-  const today = new Date().toISOString().slice(0, 10);
-  const eventDay = window.__eventDate === today;
-  // 我屬於哪幾組，以伺服器回的為準；比對姓名容易因為全名／簡稱不一致而失準
-  const serverGroups = (_raw && _raw.me && _raw.me.groups) || [];
-  const mine = serverGroups.length
-    ? serverGroups.filter(g => g !== '核心')
-    : groups.filter(g => g[1] === currentPerson || g[2].includes(currentPerson)).map(g => g[0]);
-  // 會長／團長是跨活動的固定角色，記在「權限」分頁，不在每場的核心名單裡。
-  // 只看 currentRole() 的話，切到自己沒掛名的活動就會變成「尚未分組」。
-  const globalRoles = (_raw && _raw.me && _raw.me.roles) || [];
-  const role = currentRole() || globalRoles[0] || '';
-  const admin = !!role && (ADMIN_ROLES.includes(role) || globalRoles.some(r => ADMIN_ROLES.includes(r)));
 
-  /* 標題列：活動、哪一天、我是誰 */
+  const phase = eventPhase();
+  const serverGroups = (_raw && _raw.me && _raw.me.groups) || [];
+  const mine = serverGroups.filter(g => g && g !== '核心');
+  const globalRoles = (_raw && _raw.me && _raw.me.roles) || [];
+  const admin = globalRoles.some(r => ADMIN_ROLES.includes(r));
+
+  /* 標題列 */
   const when = document.getElementById('todayWhen');
-  if (when) when.textContent = eventDay ? '今天就是活動當天'
-    : window.__eventDate ? `${window.__eventMeta || window.__eventDate}${daysAway(window.__eventDate)}` : '';
+  if (when) when.textContent = {
+    before: `${window.__eventMeta || ''}${daysAway(window.__eventDate)}`,
+    during: '今天就是活動當天',
+    after: `${window.__eventMeta || ''}${daysAway(window.__eventDate)}`,
+  }[phase];
   const title = document.getElementById('todayTitle');
   if (title) title.textContent = window.__eventName || '';
   const who = document.getElementById('todayRole');
-  if (who) who.textContent = currentPerson || '';   // 只顯示姓名，不帶角色
+  if (who) who.textContent = currentPerson || '';
 
-  /* 主區：輪到我做什麼 */
+  /* ── 主區：依階段決定 ───────────────────────────── */
   const focusTitle = document.getElementById('focusTitle');
   const list = document.getElementById('focusList');
   const more = document.getElementById('focusMore');
-  const myTasks = progressRecords.filter(t => t.status !== 'done' && (admin || mine.includes(t.group)));
+  const visible = t => admin || mine.includes(t.group);
+  const open = progressRecords.filter(t => t.status !== 'done' && visible(t));
 
-  if (eventDay) {
+  if (phase === 'during') {
     const slot = currentSlot();
     if (focusTitle) focusTitle.textContent = slot ? `現在・${slot.name}` : '活動流程';
     const jobs = slot ? Object.entries(slot.jobs || {}).filter(([g]) => admin || mine.includes(g)) : [];
     if (list) list.innerHTML = jobs.length
       ? jobs.map(([g, w]) => row(g, w, slot.time)).join('')
-      : empty(slot ? '這個時段沒有你這一組的工作' : '細流裡還沒有時段');
+      : empty(mine.length ? '這個時段沒有你這一組的工作' : '細流裡還沒有時段');
     if (more) { more.hidden = false; more.textContent = '看全場細流'; more.onclick = () => go('run'); }
+
+  } else if (phase === 'after') {
+    const mineReview = reviews.filter(r => admin || mine.includes(r[0]));
+    if (focusTitle) focusTitle.textContent = '活動結束了，寫下這次的檢討';
+    if (list) list.innerHTML = mineReview.length
+      ? mineReview.map(r => row(r[0], r[1], '')).join('')
+      : empty(mine.length ? `${mine.join('、')}還沒寫會後精進` : '還沒有人寫會後精進');
+    if (more) { more.hidden = false; more.textContent = '去寫'; more.onclick = () => go('review'); }
+
   } else {
     if (focusTitle) focusTitle.textContent = admin ? '還沒完成的工作'
       : mine.length ? `${mine.join('、')}還沒完成的` : '這場活動的工作';
-    if (list) list.innerHTML = myTasks.length
-      ? myTasks.slice(0, 4).map(t => row(t.group, t.item, dueLabel(t.due), t.status)).join('')
+    if (list) list.innerHTML = open.length
+      ? open.slice(0, 4).map(t => row(t.group, t.item, dueLabel(t.due), t.status)).join('')
       : empty(mine.length || admin ? '目前沒有待辦，都完成了' : '你還沒有被指派到工作組');
     if (more) {
-      more.hidden = myTasks.length <= 4;
-      more.textContent = `看全部 ${myTasks.length} 項`;
+      more.hidden = open.length <= 4;
+      more.textContent = `看全部 ${open.length} 項`;
       more.onclick = () => go('progress');
     }
   }
 
-  /* 需要注意：卡住的、逾期的、沒還的 */
+  /* ── 需要注意 ───────────────────────────────── */
+  const today = new Date().toISOString().slice(0, 10);
   const alerts = [];
-  progressRecords.filter(t => t.status === 'blocked' && (admin || mine.includes(t.group)))
+  progressRecords.filter(t => t.status === 'blocked' && visible(t))
     .forEach(t => alerts.push(['卡住', `${t.group}・${t.item}`, 'progress']));
-  progressRecords.filter(t => t.status !== 'done' && t.due && t.due < today && (admin || mine.includes(t.group)))
+  progressRecords.filter(t => t.status !== 'done' && t.due && t.due < today && visible(t))
     .forEach(t => alerts.push(['已過期限', `${t.group}・${t.item}`, 'progress']));
   materials.filter(m => m[5] === 'open' && (admin || mine.includes(m[1])))
     .forEach(m => alerts.push(['尚未歸還', `${m[1]}・${m[0]} ${m[2]} 件`, 'materials']));
   const alertBlock = document.getElementById('attentionBlock');
   const alertList = document.getElementById('attentionList');
   if (alertBlock) alertBlock.hidden = !alerts.length;
-  if (alertList) alertList.innerHTML = alerts.slice(0, 5).map(([tag, text, page]) =>
+  if (alertList) alertList.innerHTML = alerts.slice(0, 6).map(([tag, text, page]) =>
     `<button data-jump="${page}"><span>${tag}</span><b>${text}</b></button>`).join('');
 
-  /* 各組進度：只有幹部需要看全場 */
+  /* ── 各組進度：所有組都要出現，沒回報的才是重點 ───── */
   const teams = document.getElementById('teamsBlock');
   if (teams) {
-    teams.hidden = !admin || !progressRecords.length;
-    if (!teams.hidden) {
-      const sub = document.getElementById('teamsSub');
-      const done = progressRecords.filter(t => t.status === 'done').length;
-      if (sub) sub.textContent = `${done}／${progressRecords.length} 項完成`;
-      const el = document.getElementById('teamsList');
-      if (el) el.innerHTML = groups.map(g => {
+    teams.hidden = !admin;
+    if (admin) {
+      const rows = groups.map(g => {
         const all = progressRecords.filter(t => t.group === g[0]);
-        if (!all.length) return '';
-        const ok = all.filter(t => t.status === 'done').length;
+        const done = all.filter(t => t.status === 'done').length;
         const blocked = all.some(t => t.status === 'blocked');
-        return `<div class="team-row ${blocked ? 'is-blocked' : ''}"><b>${g[0]}</b>
-          <i><s style="width:${Math.round(ok / all.length * 100)}%"></s></i>
-          <small>${ok}/${all.length}</small></div>`;
+        const fresh = all.some(t => t.meeting === activeMeeting);
+        return { name: g[0], lead: g[1], total: all.length, done, blocked, fresh };
+      });
+      const silent = rows.filter(r => !r.total);
+      const sub = document.getElementById('teamsSub');
+      if (sub) sub.textContent = silent.length
+        ? `${silent.length}／${groups.length} 組還沒回報`
+        : `${rows.reduce((n, r) => n + r.done, 0)}／${progressRecords.length} 項完成`;
+
+      const el = document.getElementById('teamsList');
+      if (el) el.innerHTML = rows.map(r => {
+        if (!r.total) return `<div class="team-row none"><b>${r.name}</b>
+          <small>${r.lead ? r.lead + ' 尚未回報' : '還沒有組長'}</small></div>`;
+        const pct = Math.round(r.done / r.total * 100);
+        const cls = r.blocked ? 'is-blocked' : (pct === 100 ? 'is-done' : '');
+        return `<div class="team-row ${cls} ${r.fresh ? '' : 'stale'}"><b>${r.name}</b>
+          <i><s style="width:${pct}%"></s></i>
+          <small>${r.done}/${r.total}${r.blocked ? '・卡住' : ''}</small></div>`;
       }).join('');
     }
   }
@@ -399,12 +424,10 @@ function renderHome() {
   });
   const navBadge = document.getElementById('navMaterials');
   if (navBadge) {
-    const open = materials.filter(m => m[5] === 'open').length;
-    navBadge.textContent = open;
-    navBadge.hidden = !open;
+    const openItems = materials.filter(m => m[5] === 'open').length;
+    navBadge.textContent = openItems;
+    navBadge.hidden = !openItems;
   }
-  /* 換頁時底部列要跟著反亮。app.js 的 go() 原本是點亮已被移除的頂部頁籤，
-     所以不管從哪裡換頁，底部都不會有任何一格亮起來。 */
   if (!window.__goWrapped) {
     const origGo = go;
     window.go = function (id) {
@@ -414,8 +437,6 @@ function renderHome() {
     };
     window.__goWrapped = true;
   }
-  go('home');
-
   const logo = document.querySelector('.logo');
   if (logo) logo.onclick = () => go('home');
 }
