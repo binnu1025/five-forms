@@ -353,7 +353,7 @@ function renderHome() {
 
   } else if (phase === 'after') {
     const mineReview = reviews.filter(r => admin || mine.includes(r[0]));
-    if (focusTitle) focusTitle.textContent = '活動結束了，寫下這次的檢討';
+    if (focusTitle) focusTitle.textContent = '活動結束了，記下下次可以更好的地方';
     if (list) list.innerHTML = mineReview.length
       ? mineReview.map(r => row(r[0], r[1], '')).join('')
       : empty(mine.length ? `${mine.join('、')}還沒寫會後精進` : '還沒有人寫會後精進');
