@@ -125,3 +125,6 @@ body.picking .picker{display:block}
 .team-row.none small{margin-left:auto;color:#a9651f;font-size:10px}
 .team-row.is-done i s{background:#4a9b6e}
 .team-row.stale b{color:var(--muted)}
+.progress-row.is-cancelled{opacity:.55}
+.progress-row.is-cancelled h3{text-decoration:line-through;text-decoration-color:#b9c4bd}
+.status.cancelled,.progress-status.cancelled{background:#eceeed;color:#8a938d}

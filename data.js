@@ -263,7 +263,7 @@ function lockDownByRole() {
 function renderTasksFlat() {
   const all = progressRecords;
   const shown = all.filter(t => progressFilter === 'all' || t.status === progressFilter);
-  const counts = { done: 0, doing: 0, blocked: 0, todo: 0 };
+  const counts = { doing: 0, done: 0, cancelled: 0 };
   all.forEach(t => { counts[t.status] = (counts[t.status] || 0) + 1; });
 
   const touched = new Set(all.filter(t => t.meeting === activeMeeting).map(t => t.group));
@@ -272,7 +272,7 @@ function renderTasksFlat() {
   const summary = document.getElementById('meetingSummary');
   if (summary) summary.innerHTML =
     `<b>${activeMeeting || '本次會議'}</b><span>${all.length} 項工作</span>` +
-    `<i>${counts.done} 完成・${counts.doing} 進行・${counts.blocked} 卡住</i>` +
+    `<i>${counts.doing} 進行・${counts.done} 完成${counts.cancelled ? '・' + counts.cancelled + ' 取消' : ''}</i>` +
     (silent.length ? `<em class="silent">${silent.length} 組這次還沒更新：${silent.join('、')}</em>` : '');
 
   const list = document.getElementById('progressList');
@@ -281,7 +281,7 @@ function renderTasksFlat() {
     const i = all.indexOf(t);
     const editable = canEditGroup(t.group);
     const stale = t.meeting !== activeMeeting;
-    return `<article class="progress-row ${t.status === 'blocked' ? 'is-blocked' : ''} ${stale ? 'is-stale' : ''}" data-record="${i}">
+    return `<article class="progress-row ${t.status === 'cancelled' ? 'is-cancelled' : ''} ${stale ? 'is-stale' : ''}" data-record="${i}">
       <div class="progress-main">
         <div class="progress-owner"><strong>${t.group}</strong><b>${t.owner || ''}</b></div>
         ${editable
@@ -296,7 +296,7 @@ function renderTasksFlat() {
 
   document.querySelectorAll('[data-progress-status]').forEach(b => b.onclick = () => {
     const rec = progressRecords[Number(b.closest('[data-record]').dataset.record)];
-    const order = ['todo', 'doing', 'blocked', 'done'];
+    const order = ['doing', 'done', 'cancelled'];
     rec.status = order[(order.indexOf(rec.status) + 1) % order.length];
     rec.meeting = activeMeeting;              // 動到就算這次更新過
     saveProgress(); renderTasks();
@@ -304,6 +304,14 @@ function renderTasksFlat() {
   });
   document.querySelectorAll('[data-progress-edit]').forEach(b =>
     b.onclick = () => openProgressEdit(Number(b.dataset.progressEdit)));
+}
+
+/* 狀態簡化成三種。試算表裡既有的 todo／blocked 一律當成進行中。 */
+function normStatus(v) {
+  const x = String(v || '').trim();
+  if (x === 'done' || x === '已完成') return 'done';
+  if (x === 'cancelled' || x === '取消') return 'cancelled';
+  return 'doing';          // todo、blocked、空白、其他 → 進行中
 }
 
 function eventPhase() {
@@ -340,7 +348,7 @@ function renderHome() {
   const list = document.getElementById('focusList');
   const more = document.getElementById('focusMore');
   const visible = t => admin || mine.includes(t.group);
-  const open = progressRecords.filter(t => t.status !== 'done' && visible(t));
+  const open = progressRecords.filter(t => t.status === 'doing' && visible(t));
 
   if (phase === 'during') {
     const slot = currentSlot();
@@ -375,9 +383,7 @@ function renderHome() {
   /* ── 需要注意 ───────────────────────────────── */
   const today = new Date().toISOString().slice(0, 10);
   const alerts = [];
-  progressRecords.filter(t => t.status === 'blocked' && visible(t))
-    .forEach(t => alerts.push(['卡住', `${t.group}・${t.item}`, 'progress']));
-  progressRecords.filter(t => t.status !== 'done' && t.due && t.due < today && visible(t))
+  progressRecords.filter(t => t.status === 'doing' && t.due && t.due < today && visible(t))
     .forEach(t => alerts.push(['已過期限', `${t.group}・${t.item}`, 'progress']));
   materials.filter(m => m[5] === 'open' && (admin || mine.includes(m[1])))
     .forEach(m => alerts.push(['尚未歸還', `${m[1]}・${m[0]} ${m[2]} 件`, 'materials']));
@@ -395,9 +401,8 @@ function renderHome() {
       const rows = groups.map(g => {
         const all = progressRecords.filter(t => t.group === g[0]);
         const done = all.filter(t => t.status === 'done').length;
-        const blocked = all.some(t => t.status === 'blocked');
         const fresh = all.some(t => t.meeting === activeMeeting);
-        return { name: g[0], lead: g[1], total: all.length, done, blocked, fresh };
+        return { name: g[0], lead: g[1], total: all.length, done, fresh };
       });
       const silent = rows.filter(r => !r.total);
       const sub = document.getElementById('teamsSub');
@@ -410,10 +415,9 @@ function renderHome() {
         if (!r.total) return `<div class="team-row none"><b>${r.name}</b>
           <small>${r.lead ? r.lead + ' 尚未回報' : '還沒有組長'}</small></div>`;
         const pct = Math.round(r.done / r.total * 100);
-        const cls = r.blocked ? 'is-blocked' : (pct === 100 ? 'is-done' : '');
-        return `<div class="team-row ${cls} ${r.fresh ? '' : 'stale'}"><b>${r.name}</b>
+        return `<div class="team-row ${pct === 100 ? 'is-done' : ''} ${r.fresh ? '' : 'stale'}"><b>${r.name}</b>
           <i><s style="width:${pct}%"></s></i>
-          <small>${r.done}/${r.total}${r.blocked ? '・卡住' : ''}</small></div>`;
+          <small>${r.done}/${r.total}</small></div>`;
       }).join('');
     }
   }
@@ -548,7 +552,7 @@ function fromSheet(json, eventId) {
     flow: rowsToFlow(only(t['活動細流'] || [])),
     progress: only(t['工作進度'] || []).map(r => ({
       meeting: r['會議'], group: r['組別'], owner: r['負責人'], item: r['要完成事項'],
-      update: r['目前進度'], next: r['下一步'], due: r['期限'], status: r['狀態'] || 'todo',
+      update: r['目前進度'], next: r['下一步'], due: r['期限'], status: normStatus(r['狀態']),
     })),
     materials: only(t['物資借用'] || []).map(r => {
       const back = String(r['已還']).toUpperCase() === 'TRUE';
