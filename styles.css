@@ -117,3 +117,7 @@ body.picking .picker{display:block}
 .bottom-nav button span{font-size:17px}
 .bottom-nav button i{position:absolute;top:2px;right:50%;transform:translateX(16px);display:grid;place-items:center;min-width:15px;height:15px;padding:0 3px;border-radius:99px;background:var(--red);color:#fff;font-style:normal;font-size:9px}
 .title-actions{display:flex;gap:7px}
+.progress-row.is-stale{opacity:.72}
+.progress-row.is-stale .progress-owner strong{color:var(--muted)}
+.stale-note{margin:8px 0 0!important;padding-top:8px;border-top:1px dashed #dce3de;color:#a9651f!important;font-size:10px!important}
+#meetingSummary .silent{display:block;margin-top:6px;padding-top:6px;border-top:1px solid #d6e0d9;color:#a9651f;font-style:normal;font-size:10px;line-height:1.6}

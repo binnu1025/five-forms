@@ -79,7 +79,7 @@ const rowsToFlow = rows => {
 };
 
 const progressToRows = () => progressRecords.map(t => ({
-  活動ID: window.__eventId || 'A001', 會議: t.meeting, 組別: t.group, 負責人: t.owner,
+  活動ID: window.__eventId || 'A001', 會議: t.meeting || activeMeeting, 組別: t.group, 負責人: t.owner,
   要完成事項: t.item, 目前進度: t.update, 下一步: t.next, 期限: t.due, 狀態: t.status,
 }));
 const materialsToRows = () => materials.map(m => ({
@@ -256,6 +256,54 @@ function lockDownByRole() {
       if (small) small.textContent = flow[0].time;
     } else nowCard.style.display = 'none';   // 不是活動當天就別假裝有東西正在進行
   }
+}
+
+/* 工作進度改成一筆工作一列：不再按會議複製，「會議」欄變成「最後更新於」。
+   選會議不是篩選，是換一個角度看——哪幾組這次還沒更新。 */
+function renderTasksFlat() {
+  const all = progressRecords;
+  const shown = all.filter(t => progressFilter === 'all' || t.status === progressFilter);
+  const counts = { done: 0, doing: 0, blocked: 0, todo: 0 };
+  all.forEach(t => { counts[t.status] = (counts[t.status] || 0) + 1; });
+
+  const touched = new Set(all.filter(t => t.meeting === activeMeeting).map(t => t.group));
+  const silent = groups.map(g => g[0]).filter(g => !touched.has(g));
+
+  const summary = document.getElementById('meetingSummary');
+  if (summary) summary.innerHTML =
+    `<b>${activeMeeting || '本次會議'}</b><span>${all.length} 項工作</span>` +
+    `<i>${counts.done} 完成・${counts.doing} 進行・${counts.blocked} 卡住</i>` +
+    (silent.length ? `<em class="silent">${silent.length} 組這次還沒更新：${silent.join('、')}</em>` : '');
+
+  const list = document.getElementById('progressList');
+  if (!list) return;
+  list.innerHTML = shown.length ? shown.map(t => {
+    const i = all.indexOf(t);
+    const editable = canEditGroup(t.group);
+    const stale = t.meeting !== activeMeeting;
+    return `<article class="progress-row ${t.status === 'blocked' ? 'is-blocked' : ''} ${stale ? 'is-stale' : ''}" data-record="${i}">
+      <div class="progress-main">
+        <div class="progress-owner"><strong>${t.group}</strong><b>${t.owner || ''}</b></div>
+        ${editable
+          ? `<div class="progress-controls"><button class="change-leader" data-progress-edit="${i}">編輯</button><button class="progress-status ${t.status}" data-progress-status>${progressStates[t.status][0]}⌄</button></div>`
+          : `<span class="progress-status ${t.status}">${progressStates[t.status][0]}</span>`}
+        <h3>${t.item}</h3>
+        <p><span>目前進度</span>${t.update || '（還沒填）'}</p>
+        <p class="next-step"><span>下一步・${dueLabel(t.due)}</span>${t.next || ''}</p>
+        ${stale ? `<p class="stale-note">最後更新於 ${t.meeting || '—'}，${activeMeeting} 還沒碰過</p>` : ''}
+      </div></article>`;
+  }).join('') : `<div class="progress-empty">這個篩選條件目前沒有工作</div>`;
+
+  document.querySelectorAll('[data-progress-status]').forEach(b => b.onclick = () => {
+    const rec = progressRecords[Number(b.closest('[data-record]').dataset.record)];
+    const order = ['todo', 'doing', 'blocked', 'done'];
+    rec.status = order[(order.indexOf(rec.status) + 1) % order.length];
+    rec.meeting = activeMeeting;              // 動到就算這次更新過
+    saveProgress(); renderTasks();
+    toast(`${rec.group}已更新為${progressStates[rec.status][0]}`);
+  });
+  document.querySelectorAll('[data-progress-edit]').forEach(b =>
+    b.onclick = () => openProgressEdit(Number(b.dataset.progressEdit)));
 }
 
 function renderHome() {
@@ -445,6 +493,8 @@ function applyAll(d) {
     const uniq = chips.filter(([, v]) => !seen.has(v) && seen.add(v));
     if (uniq.length) dueQuickDays.splice(0, dueQuickDays.length, ...uniq);
   }
+  if (!window.__tasksPatched) { window.renderTasks = renderTasksFlat; window.__tasksPatched = true; }
+
   // 細流的「我的」檢視要知道我是哪幾組；原本 app.js 裡寫死成「環境組」
   window.__myGroups = ((_raw && _raw.me && _raw.me.groups) || []).filter(g => g && g !== '核心');
 
