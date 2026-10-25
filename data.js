@@ -158,7 +158,7 @@ function renderHistories(events, roster, currentId) {
 /* 指派／物資／預算三個對話框的「工作組」下拉是載入時就填好的，
    資料換掉之後沒人重填，所以一直停在示範的 10 組。 */
 function refillGroupSelects() {
-  ['assignGroup', 'materialGroup', 'budgetGroup'].forEach(id => {
+  ['assignGroup', 'materialGroup', 'budgetGroup', 'flowGroup'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const keep = sel.value;
@@ -203,6 +203,23 @@ function lockDownByRole() {
 
   // 細流的「＋ 時段」是排流程，屬於幹部的事
   document.querySelectorAll('#run .add').forEach(b => { b.style.display = admin ? '' : 'none'; });
+
+  // 細流：一次展開／收合全部時段，不用一個一個點
+  const expandBtn = document.getElementById('expandAll');
+  if (expandBtn) expandBtn.onclick = () => {
+    const slots = [...document.querySelectorAll('#run .flow-slot')];
+    const openAll = !slots.every(s => s.classList.contains('open'));
+    slots.forEach(s => s.classList.toggle('open', openAll));
+    expandBtn.textContent = openAll ? '全部收合' : '全部展開';
+  };
+  // 切換全場／我的／單組會重畫時段，展開狀態歸零，按鈕文字也要跟著回去
+  document.querySelectorAll('#flowModes button').forEach(b => b.addEventListener('click', () => {
+    if (expandBtn) expandBtn.textContent = '全部展開';
+  }));
+  const groupSel = document.getElementById('flowGroup');
+  if (groupSel) groupSel.addEventListener('change', () => {
+    if (expandBtn) expandBtn.textContent = '全部展開';
+  });
 
   // 核心幹部不屬於任何工作組，「我的」對他們是死路，直接不顯示
   const myBtn = document.querySelector('#flowModes [data-mode="mine"]');
@@ -254,11 +271,7 @@ function renderHome() {
   const title = document.getElementById('todayTitle');
   if (title) title.textContent = window.__eventName || '';
   const who = document.getElementById('todayRole');
-  // 「王柏儒・組長」看不出是哪一組，有組別就寫成「王柏儒・隊輔組長」
-  const roleLabel = (role === '組長' || role === '組員') && mine.length
-    ? mine[0] + role
-    : role || mine.join('、') || '尚未分組';
-  if (who) who.textContent = [currentPerson, roleLabel].filter(Boolean).join('・');
+  if (who) who.textContent = currentPerson || '';   // 只顯示姓名，不帶角色
 
   /* 主區：輪到我做什麼 */
   const focusTitle = document.getElementById('focusTitle');

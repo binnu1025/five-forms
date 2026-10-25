@@ -116,3 +116,4 @@ body.picking .picker{display:block}
 .bottom-nav button{position:relative;font-size:9px}
 .bottom-nav button span{font-size:17px}
 .bottom-nav button i{position:absolute;top:2px;right:50%;transform:translateX(16px);display:grid;place-items:center;min-width:15px;height:15px;padding:0 3px;border-radius:99px;background:var(--red);color:#fff;font-style:normal;font-size:9px}
+.title-actions{display:flex;gap:7px}
