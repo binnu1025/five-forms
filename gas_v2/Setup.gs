@@ -279,3 +279,70 @@ function 帶入人員_(team, master) {
   const 清單 = team.getSheetByName('清單');
   清單.getRange(2, 4, names.length, 1).setValues(names.map(n => [n]));
 }
+
+/* ========== 總表上的選單 ========== */
+
+/**
+ * 跑一次就好。在總表裝一個選單，以後開新活動直接在試算表上點，
+ * 不用再回到 Apps Script 編輯器。
+ */
+function 安裝選單() {
+  const id = 必須有_(P_MASTER, '總表');
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === '選單_')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('選單_').forSpreadsheet(id).onOpen().create();
+  return '裝好了。重新整理總表就會看到「五表」選單。';
+}
+
+function 選單_() {
+  SpreadsheetApp.getUi().createMenu('五表')
+    .addItem('開新活動…', '開新活動對話框_')
+    .addItem('目前設定', '目前設定_')
+    .addToUi();
+}
+
+function 開新活動對話框_() {
+  const ui = SpreadsheetApp.getUi();
+  const 問 = (題目, 說明) => {
+    const r = ui.prompt('開新活動', 題目 + (說明 ? '\n' + 說明 : ''), ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK) return null;
+    return r.getResponseText().trim();
+  };
+
+  const 名稱 = 問('活動名稱', '例如：2026.01 新春團拜');
+  if (名稱 === null) return;
+  if (!名稱) return ui.alert('活動名稱不能空白');
+
+  const 日期 = 問('日期', '格式 2026-01-18');
+  if (日期 === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(日期)) return ui.alert('日期要寫成 2026-01-18 這種格式');
+
+  const 地點 = 問('地點', '可以留空');
+  if (地點 === null) return;
+
+  const 組別字串 = 問('要哪幾組？', '用逗號分隔。留空就用公版十三組：\n' + 預設組別.join('、'));
+  if (組別字串 === null) return;
+  const 組別 = 組別字串
+    ? 組別字串.split(/[,，、]/).map(x => x.trim()).filter(Boolean).map(加組字_)
+    : null;
+
+  ui.alert(開新活動(名稱, 日期, 地點, 組別));
+}
+
+/** 組別一律以「組」結尾，自訂的也補上——跟網頁那邊的規則一致 */
+function 加組字_(n) {
+  const s = String(n || '').trim();
+  return (!s || s.slice(-1) === '組') ? s : s + '組';
+}
+
+function 目前設定_() {
+  const 行 = [];
+  [['總表', P_MASTER], ['範本｜組員', P_TPL_TEAM], ['範本｜核心', P_TPL_CORE]].forEach(([名, key]) => {
+    const id = PROP.getProperty(key);
+    行.push(名 + '：' + (id ? DriveApp.getFileById(id).getUrl() : '還沒建立'));
+  });
+  const 活動 = SpreadsheetApp.openById(必須有_(P_MASTER, '總表')).getSheetByName('活動');
+  行.push('', '已經建了 ' + Math.max(0, 活動.getLastRow() - 1) + ' 場活動');
+  SpreadsheetApp.getUi().alert('五表｜目前設定', 行.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
+}

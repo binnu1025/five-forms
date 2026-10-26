@@ -2,7 +2,11 @@
   "timeZone": "Asia/Taipei",
   "dependencies": {
     "enabledAdvancedServices": [
-      { "userSymbol": "Sheets", "version": "v4", "serviceId": "sheets" }
+      {
+        "userSymbol": "Sheets",
+        "version": "v4",
+        "serviceId": "sheets"
+      }
     ]
   },
   "exceptionLogging": "STACKDRIVER",
@@ -14,6 +18,8 @@
   "oauthScopes": [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/script.external_request"
+    "https://www.googleapis.com/auth/script.external_request",
+    "https://www.googleapis.com/auth/script.scriptapp",
+    "https://www.googleapis.com/auth/script.container.ui"
   ]
 }
