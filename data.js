@@ -594,13 +594,19 @@ function renderPicker(events, roster) {
 const ADMIN_ROLES = ['會長', '青年團團長', '活動組長', '副組長', '執行秘書', '台北團長', '新竹團長', '中壢團長'];
 const isAdmin = () => (_raw && _raw.me.roles || []).some(r => ADMIN_ROLES.includes(r));
 
+/* 組別一律用「組」結尾；自訂的也自動補上 */
+const withGroupSuffix = n => {
+  const s = String(n || '').trim();
+  return (!s || s.endsWith('組')) ? s : s + '組';
+};
+
 /* 預設組別取自「設定」分頁；沒有就拿最近一場活動的工作組 */
 function defaultGroups() {
   const fromSetting = (_raw.data['設定'] || []).find(r => r['項目'] === '預設組別');
-  const list = String((fromSetting || {})['值'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  const list = String((fromSetting || {})['值'] || '').split(',').map(withGroupSuffix).filter(Boolean);
   if (list.length) return list;
   const last = (_raw.data['活動'] || []).slice(-1)[0] || {};
-  return String(last['工作組'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  return String(last['工作組'] || '').split(',').map(withGroupSuffix).filter(Boolean);
 }
 
 function nextEventId() {
@@ -744,7 +750,7 @@ async function load() {
     const addG = document.getElementById('addGroupBtn');
     if (addG) addG.onclick = () => {
       const inp = document.getElementById('newGroupName');
-      const name = inp.value.trim();
+      const name = withGroupSuffix(inp.value);
       if (!name) return;
       if (!_picked.some(x => x[0] === name)) _picked.push([name, true]);
       inp.value = '';
