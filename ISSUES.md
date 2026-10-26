@@ -565,3 +565,80 @@ document.querySelectorAll('#run .add').forEach(b => { b.style.display = admin ? 
 
 記錄於 2026-10-26。
 
+---
+
+## 16. 改一筆工作進度會清掉別場活動的資料（⚠️ 最優先）
+
+### 這是什麼
+
+現在只要在任何一場活動裡動一下工作進度的狀態，就會發生這件事：
+
+```js
+// data.js:739
+window.saveProgress = function () { origProgress(); apiReplace('工作進度', progressToRows()); };
+```
+
+`progressToRows()` 只包含**目前這一場活動**的紀錄：
+
+```js
+// data.js:81
+const progressToRows = () => progressRecords.map(t => ({ 活動ID: window.__eventId || 'A001', ... }));
+```
+
+而 `replace` 在伺服器端是這樣處理的：
+
+```js
+// Code.gs:221
+if (body.replace) {
+  const last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, sh.getLastColumn()).clearContent();
+}
+```
+
+**整張分頁清空，然後只寫回這一場的列。**
+
+所以在 A002 按一下「進行中→已完成」，A001 的工作進度會全部消失。
+物資借用（`materialsToRows`）跟收支（`financeToRows`）是一模一樣的寫法，
+同樣會清掉別場的資料。
+
+### 為什麼還沒爆
+
+純屬運氣：A002 目前一筆工作進度都沒有，而且第 12 項擋住了新增。
+**第 12 項一修好、在 A002 改任何一筆進度，A001 的資料就沒了。**
+修第 12 項之前一定要先修這個。
+
+### 還有第二個洞：replace 會跳過權限檢查
+
+```js
+// Code.gs:228
+if (!body.replace && !canEdit_(who, group)) {
+  return json_({ ok: false, error: '你沒有「' + group + '」的填寫權限' });
+}
+```
+
+`!body.replace` 的意思是**整批覆寫時完全不檢查組別權限**。
+「活動人力」有另外擋（`只有核心幹部能整批覆寫人力`），但工作進度、
+物資、收支都沒有。而這三張表的正常編輯路徑**走的就是 replace**。
+
+也就是說：任何一個組長按一下狀態切換，就同時
+（a）清掉所有活動的工作進度，（b）繞過所有組別權限檢查。
+
+### 要怎麼修
+
+1. **不要再整張覆寫。** 改成只寫改動的那一列——`doPost` 已經有
+   `body.rowIndex` 的單列更新路徑，但前端從來沒用過。
+   前端要記住每一筆對應試算表的哪一列，或改用 `活動ID + 組別 + 要完成事項`
+   當索引鍵讓伺服器自己找。
+2. **真的需要整批覆寫時，要限定活動ID。** `replace` 應該變成
+   「只清掉這個活動ID的列」，而不是整張清空。
+3. **補上 replace 的權限檢查。** 現在整批覆寫等於完全沒有防線。
+
+### 跟即時同步的關係（第 15 項）
+
+這也是為什麼「多人同時編輯」不能直接接上去。十個人同時編輯，
+每個人送出的都是「用我手上這份覆蓋整張表」——**後送出的會把
+前面九個人的改動全部清掉**，而且是靜悄悄地清掉，沒有任何錯誤訊息。
+第 15 項要能做，這一項是前置條件。
+
+記錄於 2026-10-26。
+
