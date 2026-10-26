@@ -6,3 +6,7 @@ node_modules/
 
 # 真實名單／個資，不進公開 repo
 *.local.json
+
+# clasp 的本機專案設定（含 scriptId），不進公開 repo
+.clasp.json
+**/.clasp.json
