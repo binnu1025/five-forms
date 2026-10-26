@@ -115,10 +115,41 @@ function 建分頁_(ss, 定義) {
   });
 }
 
+/** 欄寬。autoResize 只會縮到剛好塞下標題那兩三個字，實際要打字完全不夠用。 */
+const 欄寬_ = {
+  '開始': 90, '結束': 90, '全體流程': 220,
+  '組別': 110, '角色': 90, '姓名': 110,
+  '物資': 180, '數量': 70, '攜帶者': 110, '已還': 80,
+  '借出照片': 200, '歸還照片': 200, '備註': 240,
+  '會議名稱': 160, '日期': 110,
+  '下次可以更好的地方': 360, '記錄人': 110,
+  '會議': 120, '要完成事項': 260, '負責人': 110,
+  '目前進度': 300, '下一步': 240, '期限': 110, '狀態': 100,
+  '類型': 90, '項目': 220, '金額': 110, '登錄人': 110,
+  '活動ID': 90, '活動名稱': 240, '地點': 140, '組員檔ID': 130, '核心檔ID': 130,
+  'Gmail': 220, '雁群小組': 130, '人員': 120, '值': 200, '說明': 260,
+};
+const 預設欄寬 = 140;   // 細流的各組欄位、以及任何沒列到的欄位
+
+/** 依標題文字決定每一欄多寬；太寬的欄位改成自動換行，不然整列會被撐很高。 */
+function 套欄寬_(sh) {
+  const n = sh.getLastColumn();
+  if (!n) return;
+  const 標題 = sh.getRange(1, 1, 1, n).getDisplayValues()[0];
+  標題.forEach((c, i) => {
+    const w = 欄寬_[String(c).trim()] || 預設欄寬;
+    sh.setColumnWidth(i + 1, w);
+    const 策略 = w >= 200 ? SpreadsheetApp.WrapStrategy.WRAP : SpreadsheetApp.WrapStrategy.CLIP;
+    sh.getRange(1, i + 1, sh.getMaxRows(), 1).setWrapStrategy(策略);
+  });
+  sh.getRange(1, 1, 1, n).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);  // 標題列不換行
+}
+
 /** 標題列：填字、粗體、凍結、保護起來不讓人改欄位名稱。 */
 function 標題列_(sh, cols) {
   sh.getRange(1, 1, 1, cols.length).setValues([cols])
-    .setFontWeight('bold').setBackground('#2f4f3f').setFontColor('#ffffff');
+    .setFontWeight('bold').setBackground('#2f4f3f').setFontColor('#ffffff')
+    .setVerticalAlignment('middle');
   sh.setFrozenRows(1);
   sh.getRange(1, 1, 1, cols.length).protect()
     .setDescription('欄位名稱是程式讀取的依據，不要改')
@@ -126,7 +157,7 @@ function 標題列_(sh, cols) {
   if (sh.getMaxColumns() > cols.length) {
     sh.deleteColumns(cols.length + 1, sh.getMaxColumns() - cols.length);
   }
-  sh.autoResizeColumns(1, cols.length);
+  套欄寬_(sh);
 }
 
 function 寫入_(sh, rows) {
@@ -261,7 +292,7 @@ function 加細流組欄_(ss, groups) {
   sh.getRange(1, 起, 1, groups.length).setValues([groups])
     .setFontWeight('bold').setBackground('#2f4f3f').setFontColor('#ffffff');
   sh.getRange('A2:B').setNumberFormat('HH:mm');
-  sh.autoResizeColumns(1, sh.getLastColumn());
+  套欄寬_(sh);
 }
 
 function 寫組別清單_(sh, groups) {
@@ -293,6 +324,28 @@ function 安裝選單() {
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('選單_').forSpreadsheet(id).onOpen().create();
   return '裝好了。重新整理總表就會看到「五表」選單。';
+}
+
+/**
+ * 範本已經建好之後才改欄寬的話跑這個。順便把選單裝起來，
+ * 這樣只要在編輯器按一次就好。
+ */
+function 完成設定() {
+  const 修 = [];
+  [P_TPL_TEAM, P_TPL_CORE].forEach(key => {
+    const id = PROP.getProperty(key);
+    if (!id) return;
+    const ss = SpreadsheetApp.openById(id);
+    ss.getSheets().forEach(sh => 套欄寬_(sh));
+    修.push(ss.getName());
+  });
+  const master = PROP.getProperty(P_MASTER);
+  if (master) {
+    const ss = SpreadsheetApp.openById(master);
+    ss.getSheets().forEach(sh => 套欄寬_(sh));
+    修.push(ss.getName());
+  }
+  return [安裝選單(), '欄寬已整理：' + 修.join('、')].join(String.fromCharCode(10));
 }
 
 function 選單_() {
